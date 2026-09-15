@@ -1,16 +1,14 @@
-# CODEOWNERS：PR 自动请求对应负责人评审（任务书：契约改动须三组会签）
-# 配合 main 分支保护开启 "Require review from Code Owners" 后生效。
-# TODO: 把下面的用户名替换为实际 GitHub 账号
+# CODEOWNERS：PR 自动请求对应负责人评审（契约改动须三组会签）
 
-# 契约层与公共代码：三组 + 负责人都会签
-/cloud-common/            @zhangguilin @backend-a @backend-b @faller-666
-/docs/                    @zhangguilin @backend-a @backend-b @faller-666
+# 契约层与公共代码：三组都会签
+/cloud-common/            @wwww-yl @tang-qin1026 @faller-666
+/docs/                    @wwww-yl @tang-qin1026 @faller-666
 
 # 各组模块：各组自审
-/cloud-auth/              @backend-a
-/cloud-transfer/          @backend-b
+/cloud-auth/              @tang-qin1026
+/cloud-transfer/          @wwww-yl
 /cloud-files/             @faller-666
 
-# 部署与启动模块：负责人 + 运维
-/cloud-app/               @zhangguilin @ops
-/.github/                 @zhangguilin
+# 部署与启动模块（张贵林/运维 ID 拿到后替换）
+/cloud-app/               @faller-666
+/.github/                 @faller-666

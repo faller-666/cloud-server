@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.company.cloud.files.dir.mapper.FileNodeMapper">
+
+    <!-- 面包屑：自当前节点向上递归到根（R-C01）。PG 递归 CTE，一条 SQL 出结果 -->
+    <select id="selectBreadcrumb" resultType="com.company.cloud.files.dir.dto.BreadcrumbItem">
+        WITH RECURSIVE up AS (
+            SELECT id, parent_id, name, 1 AS lvl
+            FROM files
+            WHERE id = #{id}
+              AND owner_id = #{userId}
+              AND deleted_at IS NULL
+            UNION ALL
+            SELECT f.id, f.parent_id, f.name, up.lvl + 1
+            FROM files f
+            JOIN up ON f.id = up.parent_id
+            WHERE up.lvl < 64
+        )
+        SELECT id, name FROM up ORDER BY lvl DESC
+    </select>
+
+    <!-- 级联软删：自身 + 全部子孙一次性打标（R-C04）。递归向下收集，单条 UPDATE -->
+    <update id="softDeleteCascade">
+        WITH RECURSIVE sub AS (
+            SELECT id FROM files
+            WHERE id = #{id}
+              AND owner_id = #{userId}
+              AND deleted_at IS NULL
+            UNION ALL
+            SELECT f.id FROM files f
+            JOIN sub s ON f.parent_id = s.id
+            WHERE f.deleted_at IS NULL
+        )
+        UPDATE files
+        SET deleted_at = now(), updated_at = now()
+        WHERE id IN (SELECT id FROM sub)
+    </update>
+
+    <!-- 移动校验：targetId 是否落在 id 的子树内（含自身）。> 0 即拒绝（R-C03） -->
+    <select id="countInSubtree" resultType="int">
+        WITH RECURSIVE sub AS (
+            SELECT id FROM files WHERE id = #{id}
+            UNION ALL
+            SELECT f.id FROM files f
+            JOIN sub s ON f.parent_id = s.id
+        )
+        SELECT COUNT(*) FROM sub WHERE id = #{targetId}
+    </select>
+
+</mapper>

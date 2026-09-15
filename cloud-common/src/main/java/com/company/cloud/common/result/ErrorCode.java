@@ -15,6 +15,7 @@ package com.company.cloud.common.result;
 public enum ErrorCode {
 
     // ---- 认证/权限 ----
+    BAD_REQUEST(40000, "请求参数错误"),
     UNAUTHORIZED(40001, "未登录或令牌无效"),
     FORBIDDEN(40003, "无权限访问"),
 
