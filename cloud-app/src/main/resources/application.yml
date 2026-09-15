@@ -1,0 +1,58 @@
+# 私有云存储平台 · 应用配置
+# 端口：3001 / 3002 双实例（不对外，Nginx :8080 反代）。部署时 --server.port 覆盖。
+server:
+  port: 3001
+  servlet:
+    # 全局 /api 前缀（总纲 §5）
+    context-path: /api
+
+spring:
+  application:
+    name: cloud-server
+
+  # 数据库：PostgreSQL 16，仅容器网可达（Compose 服务名 postgres）
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cloud}
+    username: ${DB_USER:cloud}
+    password: ${DB_PASSWORD:cloud}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+  # Redis 7：会话 / 限流 / 审计异步队列 / 统计缓存
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3s
+
+  # 数据库变更一律走 Flyway migration，禁止手工改库（总纲 §5）
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # 统一时间口径：ISO 8601（总纲 §5）
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ssXXX
+    time-zone: Asia/Shanghai
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+
+# Swagger（交付物要求；生产环境按 profile 关闭）
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: info
+    com.company.cloud: debug
