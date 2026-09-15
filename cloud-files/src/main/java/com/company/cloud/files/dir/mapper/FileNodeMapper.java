@@ -1,8 +1,13 @@
 package com.company.cloud.files.dir.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.cloud.files.dir.dto.BreadcrumbItem;
 import com.company.cloud.files.dir.entity.FileNode;
+import com.company.cloud.files.recycle.dto.SubtreeFile;
+import com.company.cloud.files.stats.dto.StatsOverview;
+import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -45,4 +50,98 @@ public interface FileNodeMapper extends BaseMapper<FileNode> {
     List<String> selectSiblingNames(@Param("userId") Long userId,
                                     @Param("parentId") Long parentId,
                                     @Param("base") String base);
+
+    // ---------- 回收站（R-C05/C06，SQL 见 FileNodeMapper.xml） ----------
+
+    /**
+     * 回收站顶层节点分页：本人已删除、且父节点不在回收站中（或父为根）的节点，
+     * 按 deleted_at DESC。MP Page 首参自动分页。
+     */
+    Page<FileNode> selectRecycleTopPage(Page<FileNode> page, @Param("userId") Long userId);
+
+    /**
+     * 级联还原：自身 + 全部已删子孙清 deleted_at（不碰 parent_id / name，
+     * 顶层节点的 parent/name 由调用方单独 UPDATE）。
+     */
+    int restoreCascade(@Param("userId") Long userId, @Param("id") Long id);
+
+    /**
+     * 子树文件清单：回收站子树内全部 is_dir=false 节点的 id/sha256/size
+     * （彻底删除前收集，用于释放配额与递减引用计数）。
+     */
+    List<SubtreeFile> selectSubtreeFiles(@Param("userId") Long userId, @Param("id") Long id);
+
+    /**
+     * 级联物理删除：自身 + 全部已删子孙 DELETE（回收站彻底删除）。
+     */
+    int deleteCascadePhysical(@Param("userId") Long userId, @Param("id") Long id);
+
+    /**
+     * 释放用户配额（users 表 Owner 是 A 组，但释放配额是 C 组彻底删除的职责，
+     * 直接 SQL；GREATEST 兜底防负值）。
+     */
+    int releaseQuota(@Param("userId") Long userId, @Param("bytes") long bytes);
+
+    // ---------- 引用计数（R-C07，B 组接口未交付，本地实现） ----------
+
+    /**
+     * 递减指定 sha256 存活文件的引用计数（GREATEST 兜底防负值）。
+     */
+    int decrementRefCount(@Param("sha256") String sha256);
+
+    /**
+     * 指定 sha256 存活记录的最小 ref_count；无存活记录返回 null。
+     */
+    @Select("""
+            SELECT MIN(ref_count) FROM files
+            WHERE sha256 = #{sha256} AND is_dir = false AND deleted_at IS NULL
+            """)
+    Integer selectMinAliveRefCount(@Param("sha256") String sha256);
+
+    // ---------- 统计大盘（R-C10，@Select 注解聚合） ----------
+
+    /** 存活文件总数 */
+    @Select("SELECT COUNT(*) FROM files WHERE owner_id = #{userId} AND is_dir = false AND deleted_at IS NULL")
+    long countActiveFiles(@Param("userId") Long userId);
+
+    /** 存活文件总字节 */
+    @Select("SELECT COALESCE(SUM(size), 0) FROM files WHERE owner_id = #{userId} AND is_dir = false AND deleted_at IS NULL")
+    long sumActiveBytes(@Param("userId") Long userId);
+
+    /** 存活目录总数 */
+    @Select("SELECT COUNT(*) FROM files WHERE owner_id = #{userId} AND is_dir = true AND deleted_at IS NULL")
+    long countActiveDirs(@Param("userId") Long userId);
+
+    /** 今日新增（文件 + 目录） */
+    @Select("SELECT COUNT(*) FROM files WHERE owner_id = #{userId} AND created_at >= CURRENT_DATE")
+    long countTodayNew(@Param("userId") Long userId);
+
+    /** 回收站条数 */
+    @Select("SELECT COUNT(*) FROM files WHERE owner_id = #{userId} AND deleted_at IS NOT NULL")
+    long countRecycle(@Param("userId") Long userId);
+
+    /** 回收站占用字节 */
+    @Select("SELECT COALESCE(SUM(size), 0) FROM files WHERE owner_id = #{userId} AND deleted_at IS NOT NULL")
+    long sumRecycleBytes(@Param("userId") Long userId);
+
+    /** 扩展名分布 TOP10（按文件数降序） */
+    @Select("""
+            SELECT lower(substring(name from '\\.([^.]+)$')) AS ext,
+                   COUNT(*) AS cnt,
+                   COALESCE(SUM(size), 0) AS bytes
+            FROM files
+            WHERE owner_id = #{userId}
+              AND is_dir = false
+              AND deleted_at IS NULL
+              AND name LIKE '%.%'
+            GROUP BY ext
+            ORDER BY cnt DESC
+            LIMIT 10
+            """)
+    @ConstructorArgs({
+            @Arg(column = "ext", javaType = String.class),
+            @Arg(column = "cnt", javaType = long.class),
+            @Arg(column = "bytes", javaType = long.class)
+    })
+    List<StatsOverview.TypeCount> selectTypeBreakdown(@Param("userId") Long userId);
 }

@@ -5,8 +5,8 @@ package com.company.cloud.common.result;
  *
  * <p>段位分配（新增错误码在此登记，改动走契约会签）：
  * <ul>
- *   <li>400xx 认证/权限</li>
- *   <li>401xx 用户/配额（A 组）</li>
+ *   <li>400xx 通用请求错误</li>
+ *   <li>401xx/40301-40302/40401/42101/42301 认证与用户（A 组，任务书 02 契约原值）</li>
  *   <li>402xx 传输（B 组）</li>
  *   <li>403xx 文件管理（C 组）</li>
  *   <li>500xx 系统错误</li>
@@ -17,13 +17,24 @@ public enum ErrorCode {
     // ---- 认证/权限 ----
     BAD_REQUEST(40000, "请求参数错误"),
     UNAUTHORIZED(40001, "未登录或令牌无效"),
-    FORBIDDEN(40003, "无权限访问"),
+
+    // ---- 认证/用户（A 组，码值对齐任务书 02 契约，前端按此映射提示）----
+    LOGIN_FAILED(40101, "用户名或密码错误"),
+    ACCOUNT_DISABLED(40102, "账号已被禁用"),
+    TOKEN_INVALID(40103, "登录已过期，请重新登录"),
+    FORBIDDEN(40301, "无权限访问"),
+    MUST_CHANGE_PASSWORD(40302, "请先修改初始密码"),
+    USER_NOT_FOUND(40401, "用户不存在"),
+    QUOTA_TOO_LOW(42101, "配额不能低于当前已用量"),
+    ACCOUNT_LOCKED(42301, "失败次数过多，账号已临时锁定"),
 
     // ---- 文件管理（C 组 403xx）----
     FILE_NOT_FOUND(40304, "文件或目录不存在"),
     FILE_NAME_CONFLICT(40309, "同级存在同名文件"),
     MOVE_INTO_SUBDIR(40310, "不能移动到自身或其子目录下"),
     QUOTA_EXCEEDED(40311, "存储配额不足"),
+    RECYCLE_NOT_FOUND(40314, "回收站中不存在该文件"),
+    DIR_NOT_EMPTY_RESTORE_CONFLICT(40315, "还原目标位置存在同名文件"),
 
     // ---- 系统 ----
     SYSTEM_ERROR(50000, "系统繁忙，请稍后重试");

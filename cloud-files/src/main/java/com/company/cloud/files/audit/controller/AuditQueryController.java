@@ -1,0 +1,67 @@
+package com.company.cloud.files.audit.controller;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.company.cloud.common.result.PageResult;
+import com.company.cloud.common.result.Result;
+import com.company.cloud.files.audit.dto.AuditLogVO;
+import com.company.cloud.files.audit.entity.AuditLog;
+import com.company.cloud.files.audit.mapper.AuditLogMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 审计日志查询（R-C09）。
+ *
+ * <p><b>鉴权说明（TODO）：</b>X-User-Id / X-User-Role 请求头为开发期 Mock；
+ * A 组 Security Filter 交付后改从 SecurityContext 取当前用户与角色，
+ * 权限规则不变：admin 可全查（含指定任意 userId），普通用户强制只查自己。
+ */
+@Tag(name = "审计日志", description = "审计日志查询（C 组）")
+@RestController
+@RequestMapping("/audit-logs")
+@RequiredArgsConstructor
+public class AuditQueryController {
+
+    private final AuditLogMapper auditLogMapper;
+
+    @Operation(summary = "分页查询审计日志（R-C09）：admin 全查，普通用户仅本人")
+    @GetMapping
+    public Result<PageResult<AuditLogVO>> query(
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long currentUserId,
+            @RequestHeader(value = "X-User-Role", required = false, defaultValue = "user") String role,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        QueryWrapper<AuditLog> qw = new QueryWrapper<>();
+        if ("admin".equalsIgnoreCase(role)) {
+            // 管理员：可按任意 userId 过滤，不传则全量
+            qw.eq(userId != null, "user_id", userId);
+        } else {
+            // 普通用户：强制只查自己，忽略传入的 userId
+            qw.eq("user_id", currentUserId);
+        }
+        qw.eq(action != null && !action.isBlank(), "action", action);
+        qw.ge(start != null, "created_at", start);
+        qw.le(end != null, "created_at", end);
+        qw.orderByDesc("created_at");
+
+        Page<AuditLog> result = auditLogMapper.selectPage(Page.of(page, size), qw);
+        List<AuditLogVO> list = result.getRecords().stream().map(AuditLogVO::from).toList();
+        return Result.ok(PageResult.of(result.getTotal(), list));
+    }
+}

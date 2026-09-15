@@ -2,6 +2,9 @@ package com.company.cloud.files.dir.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.company.cloud.common.audit.AuditActions;
+import com.company.cloud.common.audit.AuditEvent;
+import com.company.cloud.common.audit.AuditService;
 import com.company.cloud.common.result.BizException;
 import com.company.cloud.common.result.ErrorCode;
 import com.company.cloud.files.dir.dto.DirListResponse;
@@ -31,6 +34,7 @@ public class FileNodeServiceImpl implements FileNodeService {
     );
 
     private final FileNodeMapper mapper;
+    private final AuditService auditService;
 
     // ---------- R-C01 列目录 ----------
 
@@ -88,6 +92,10 @@ public class FileNodeServiceImpl implements FileNodeService {
         node.setSize(0L);
         node.setRefCount(0);
         mapper.insert(node);
+        // 审计：ip 暂传 null（TODO：A 组 Security 交付后从请求上下文补齐）
+        auditService.record(new AuditEvent(
+                userId, AuditActions.MKDIR, String.valueOf(node.getId()), null,
+                Map.of("name", node.getName(), "id", node.getId(), "parentId", parentId)));
         return FileNodeVO.from(node);
     }
 

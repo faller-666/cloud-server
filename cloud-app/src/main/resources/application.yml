@@ -29,8 +29,14 @@ spring:
   # 数据库变更一律走 Flyway migration，禁止手工改库（总纲 §5）
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath*:db/migration
     baseline-on-migrate: true
+
+  # JPA（A 组认证模块实体管理；ddl 一律以 Flyway 为准，仅校验）
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
 
   # 统一时间口径：ISO 8601（总纲 §5）
   jackson:
@@ -57,3 +63,17 @@ logging:
   level:
     root: info
     com.company.cloud: debug
+
+# A 组认证/用户域配置
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-key-at-least-32-bytes-long}
+    issuer: ${JWT_ISSUER:cloud-server}
+    access-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:120}
+    refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:14}
+  security:
+    max-login-failures: ${SECURITY_MAX_LOGIN_FAILURES:5}
+    lock-minutes: ${SECURITY_LOCK_MINUTES:15}
+    rate-limit-per-minute: ${SECURITY_RATE_LIMIT_PER_MINUTE:5}
+  role:
+    default-quota-bytes: ${DEFAULT_QUOTA_BYTES:21474836480}

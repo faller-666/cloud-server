@@ -6,6 +6,7 @@ import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.dir.dto.MkdirRequest;
 import com.company.cloud.files.dir.dto.UpdateNodeRequest;
 import com.company.cloud.files.dir.service.FileNodeService;
+import com.company.cloud.files.recycle.service.RecycleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FileNodeController {
 
     private final FileNodeService fileNodeService;
+    private final RecycleService recycleService;
 
     @Operation(summary = "列目录（R-C01）：分页 + 排序 + 面包屑")
     @GetMapping
@@ -64,12 +66,17 @@ public class FileNodeController {
         return Result.ok(fileNodeService.update(userId, id, request));
     }
 
-    @Operation(summary = "删除入回收站（R-C04）：级联软删，幂等")
+    @Operation(summary = "删除（R-C04/R-C06）：默认入回收站；?force=1 彻底删除（级联物理删+释放配额）")
     @DeleteMapping("/{id}")
     public Result<Void> delete(
             @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long userId,
-            @PathVariable Long id) {
-        fileNodeService.delete(userId, id);
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int force) {
+        if (force == 1) {
+            recycleService.forceDelete(userId, id);
+        } else {
+            fileNodeService.delete(userId, id);
+        }
         return Result.ok();
     }
 }
