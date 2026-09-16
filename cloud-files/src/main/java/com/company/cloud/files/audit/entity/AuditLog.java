@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 审计日志（对应 audit_logs 表，Owner：C 组，见 V2001__create_audit_logs.sql）。
@@ -36,5 +36,5 @@ public class AuditLog {
     /** 扩展信息（JSON 文本，落库为 JSONB） */
     private String detail;
 
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

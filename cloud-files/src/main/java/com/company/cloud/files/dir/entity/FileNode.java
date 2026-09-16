@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 文件/目录节点（对应 files 表）。
@@ -43,9 +43,9 @@ public class FileNode {
     private Integer refCount;
 
     /** 软删时间（入回收站），null 表示正常 */
-    private LocalDateTime deletedAt;
+    private OffsetDateTime deletedAt;
 
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 }

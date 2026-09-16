@@ -2,7 +2,7 @@ package com.company.cloud.files.dir.dto;
 
 import com.company.cloud.files.dir.entity.FileNode;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 文件/目录节点视图（返回前端）。
@@ -13,8 +13,8 @@ public record FileNodeVO(
         String name,
         Boolean isDir,
         Long size,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
     public static FileNodeVO from(FileNode node) {
         return new FileNodeVO(
