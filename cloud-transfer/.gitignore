@@ -1,0 +1,21 @@
+# 编译产物
+target/
+out/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+*.swp
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 日志与临时文件
+*.log
+/tmp/

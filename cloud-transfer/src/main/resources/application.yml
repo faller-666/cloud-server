@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: cloud-storage-storage
+  # 虚拟线程：I/O 密集的分片流式转发，每请求一个轻量虚拟线程
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    formcontent:
+      filter:
+        enabled: false   # 禁用 FormContentFilter，否则 PUT 二进制分片会被当表单解析、body 被消费（EntityTooSmall 的根因）
+  datasource:
+    url: jdbc:postgresql://localhost:5432/cloudstorage
+    username: cloud
+    password: cloud123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none          # 表结构全部交给 Flyway，JPA 不建表
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: cloud-files
+
+upload:
+  part-size: 8388608          # 8MB 单片
+  max-file-size: 10737418240  # 10GB 上限
+  allowed-extensions: ""      # 留空 = 不限制扩展名
+  session-ttl-hours: 24       # 会话 24h 过期
+
+download:
+  presign-expiry-seconds: 300 # 下载预签名 5 分钟
+
+server:
+  port: 8080
