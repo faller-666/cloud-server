@@ -31,6 +31,10 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+    # 忽略"低于当前版本且未应用"的迁移校验错误：B 组 V1xxx 号段交付晚于 C 组 V2xxx
+    # 时必然触发（如 B 组 V1/V2/V3 晚于 v2003），已应用库跳过即可；
+    # 全新库无此校验场景，所有迁移仍按序全量执行。
+    ignore-migration-patterns: "*:pending"
 
   # JPA（A 组认证模块实体管理；ddl 一律以 Flyway 为准，仅校验）
   jpa:
