@@ -86,7 +86,8 @@ public class UploadService {
                 throw new BizException(ErrorCode.STORAGE_QUOTA_EXCEEDED);
             }
             FileEntity f = fileRepo.save(FileEntity.builder()
-                    .ownerId(userId).parentId(targetParent).name(name)
+                    .ownerId(userId).parentId(targetParent)
+                    .name(resolveUniqueName(userId, targetParent, name))
                     .isDir(false).size(size).sha256(sha256).refCount(1)
                     .build());
             return InitResult.done(f.getId());
@@ -197,10 +198,13 @@ public class UploadService {
         }
 
         // 写元数据（对象为内容寻址 objects/<sha256>，引用计数归 files 表 ref_count）
+        // 同级重名自动改名，避免撞 uk_files_sibling_name 唯一索引（修复上传同名文件 500 系统繁忙）
+        long targetParent = s.getTargetParent() == null ? 0L : s.getTargetParent();
         FileEntity saved = fileRepo.save(FileEntity.builder()
                 .ownerId(userId)
-                .parentId(s.getTargetParent() == null ? 0L : s.getTargetParent())
-                .name(s.getName()).isDir(false).size(s.getSizeBytes())
+                .parentId(targetParent)
+                .name(resolveUniqueName(userId, targetParent, s.getName()))
+                .isDir(false).size(s.getSizeBytes())
                 .sha256(s.getSha256()).refCount(1)
                 .build());
 
@@ -265,6 +269,18 @@ public class UploadService {
     }
 
     // ============ 私有工具 ============
+    /** 同级重名自动改名：base 被占用则追加 (2)(3)... 后缀（对齐 C 组 resolveUniqueName + uk_files_sibling_name）。 */
+    private String resolveUniqueName(Long userId, long parentId, String base) {
+        if (!fileRepo.existsByOwnerIdAndParentIdAndNameAndDeletedAtIsNull(userId, parentId, base)) {
+            return base;
+        }
+        int i = 2;
+        while (fileRepo.existsByOwnerIdAndParentIdAndNameAndDeletedAtIsNull(userId, parentId, base + " (" + i + ")")) {
+            i++;
+        }
+        return base + " (" + i + ")";
+    }
+
     private UploadSessionEntity ownedSession(Long userId, Long sessionId) {
         UploadSessionEntity s = sessionRepo.findById(sessionId)
                 .orElseThrow(() -> new BizException(ErrorCode.UPLOAD_SESSION_NOT_FOUND));
