@@ -7,6 +7,8 @@ import java.time.OffsetDateTime;
 
 /**
  * users 表实体（与 V1__create_users.sql 对齐，ddl-auto=validate 校验）
+ *
+ * <p>P2 字段补充（V1002）：nickname / email / last_login_at，对应用户资料展示。
  */
 @Entity
 @Table(name = "users")
@@ -41,6 +43,16 @@ public class User {
 
     @Column(name = "must_change_password", nullable = false)
     private Boolean mustChangePassword = true;
+
+    /** 显示昵称（可选，V1002） */
+    private String nickname;
+
+    /** 邮箱（可选，唯一，V1002） */
+    private String email;
+
+    /** 最近登录时间（登录成功时回填，V1002） */
+    @Column(name = "last_login_at")
+    private OffsetDateTime lastLoginAt;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;

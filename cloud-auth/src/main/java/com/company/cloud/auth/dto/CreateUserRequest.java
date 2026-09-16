@@ -20,4 +20,10 @@ public class CreateUserRequest {
 
     /** 角色，默认 user */
     private String role;
+
+    /** 显示昵称（可选，V1002） */
+    private String nickname;
+
+    /** 邮箱（可选，唯一，V1002） */
+    private String email;
 }
