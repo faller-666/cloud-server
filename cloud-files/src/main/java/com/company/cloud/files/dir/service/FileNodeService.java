@@ -5,13 +5,18 @@ import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.dir.dto.MkdirRequest;
 import com.company.cloud.files.dir.dto.UpdateNodeRequest;
 
+import java.util.List;
+
 /**
  * 目录树与文件管理（任务书 04：R-C01 ~ R-C04）。
  */
 public interface FileNodeService {
 
-    /** R-C01：列目录（分页 + 排序 + 面包屑） */
-    DirListResponse list(Long userId, long parentId, int page, int size, String sort);
+    /** R-C01：列目录（分页 + 排序 + 面包屑）；keyword 非空时切换为全局搜索（忽略 parent） */
+    DirListResponse list(Long userId, long parentId, int page, int size, String sort, String keyword);
+
+    /** 目录树（前端树状导航/拖拽用）：一次性返回当前用户全部目录，扁平 id+parentId 列表 */
+    List<FileNodeVO> tree(Long userId);
 
     /** R-C02：新建文件夹（同级重名自动追加 (2)(3) 后缀） */
     FileNodeVO mkdir(Long userId, MkdirRequest request);

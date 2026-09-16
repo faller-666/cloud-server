@@ -38,15 +38,23 @@ public class FileNodeController {
     private final FileNodeService fileNodeService;
     private final RecycleService recycleService;
 
-    @Operation(summary = "列目录（R-C01）：分页 + 排序 + 面包屑")
+    @Operation(summary = "列目录（R-C01）：分页 + 排序 + 面包屑；keyword 非空时全局搜索")
     @GetMapping
     public Result<DirListResponse> list(
             @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long userId,
             @RequestParam(defaultValue = "0") long parent,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String sort) {
-        return Result.ok(fileNodeService.list(userId, parent, page, size, sort));
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String keyword) {
+        return Result.ok(fileNodeService.list(userId, parent, page, size, sort, keyword));
+    }
+
+    @Operation(summary = "目录树：一次性返回当前用户全部目录（扁平 id+parentId 列表，前端自行建树）")
+    @GetMapping("/tree")
+    public Result<java.util.List<FileNodeVO>> tree(
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long userId) {
+        return Result.ok(fileNodeService.tree(userId));
     }
 
     @Operation(summary = "新建文件夹（R-C02）：同级重名自动改名")

@@ -36,18 +36,24 @@ public class FileNodeServiceImpl implements FileNodeService {
     private final FileNodeMapper mapper;
     private final AuditService auditService;
 
-    // ---------- R-C01 列目录 ----------
+    // ---------- R-C01 列目录（+ keyword 全局搜索） ----------
 
     @Override
-    public DirListResponse list(Long userId, long parentId, int page, int size, String sort) {
-        if (parentId > 0) {
+    public DirListResponse list(Long userId, long parentId, int page, int size, String sort, String keyword) {
+        boolean searching = keyword != null && !keyword.isBlank();
+        if (!searching && parentId > 0) {
             requireOwnedDir(userId, parentId);
         }
 
         QueryWrapper<FileNode> qw = new QueryWrapper<>();
         qw.eq("owner_id", userId)
-          .eq("parent_id", parentId)
           .isNull("deleted_at");
+        if (searching) {
+            // 全局搜索：忽略 parent，全空间按名称模糊匹配；%/_ 转义防通配符注入
+            qw.like("name", escapeLike(keyword.trim()));
+        } else {
+            qw.eq("parent_id", parentId);
+        }
         applySort(qw, sort);
 
         Page<FileNode> result = mapper.selectPage(Page.of(page, size), qw);
@@ -56,8 +62,25 @@ public class FileNodeServiceImpl implements FileNodeService {
         return new DirListResponse(
                 result.getTotal(),
                 list,
-                parentId > 0 ? mapper.selectBreadcrumb(userId, parentId) : List.of()
+                (!searching && parentId > 0) ? mapper.selectBreadcrumb(userId, parentId) : List.of()
         );
+    }
+
+    /** PostgreSQL LIKE 默认以反斜杠为转义符，逐字符转义即可 */
+    private static String escapeLike(String kw) {
+        return kw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    // ---------- 目录树（前端树状导航 / 拖拽移动） ----------
+
+    @Override
+    public List<FileNodeVO> tree(Long userId) {
+        QueryWrapper<FileNode> qw = new QueryWrapper<>();
+        qw.eq("owner_id", userId)
+          .eq("is_dir", true)
+          .isNull("deleted_at")
+          .orderByAsc("name");
+        return mapper.selectList(qw).stream().map(FileNodeVO::from).toList();
     }
 
     private void applySort(QueryWrapper<FileNode> qw, String sort) {
@@ -115,6 +138,7 @@ public class FileNodeServiceImpl implements FileNodeService {
         Long targetParent = request.parentId();
 
         boolean isMove = targetParent != null && !targetParent.equals(node.getParentId());
+        long fromParentId = node.getParentId() == null ? 0L : node.getParentId();
         if (isMove) {
             if (targetParent > 0) {
                 requireOwnedDir(userId, targetParent);
@@ -130,6 +154,14 @@ public class FileNodeServiceImpl implements FileNodeService {
         }
 
         mapper.updateById(node);
+        if (isMove) {
+            // 审计：移动（含前端拖拽），记录源/目标目录
+            auditService.record(new AuditEvent(
+                    userId, AuditActions.MOVE, String.valueOf(id), null,
+                    Map.of("name", node.getName(), "id", id,
+                            "fromParentId", fromParentId,
+                            "toParentId", targetParent)));
+        }
         return FileNodeVO.from(node);
     }
 
