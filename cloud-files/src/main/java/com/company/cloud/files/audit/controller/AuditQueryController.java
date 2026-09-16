@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 审计日志查询（R-C09）。
@@ -61,7 +62,24 @@ public class AuditQueryController {
         qw.orderByDesc("created_at");
 
         Page<AuditLog> result = auditLogMapper.selectPage(Page.of(page, size), qw);
-        List<AuditLogVO> list = result.getRecords().stream().map(AuditLogVO::from).toList();
+        List<AuditLog> records = result.getRecords();
+
+        // 批量补 username：本页出现的 user_id 一次查 users，避免 N+1
+        List<Long> userIds = records.stream()
+                .map(AuditLog::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> usernames = new java.util.HashMap<>();
+        if (!userIds.isEmpty()) {
+            for (Map<String, Object> row : auditLogMapper.selectUsernames(userIds)) {
+                usernames.put(((Number) row.get("id")).longValue(), (String) row.get("username"));
+            }
+        }
+
+        List<AuditLogVO> list = records.stream()
+                .map(log -> AuditLogVO.from(log, usernames.get(log.getUserId())))
+                .toList();
         return Result.ok(PageResult.of(result.getTotal(), list));
     }
 }
