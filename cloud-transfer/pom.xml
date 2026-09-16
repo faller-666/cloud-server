@@ -4,11 +4,6 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 临时归位（C 组止血）：parent/坐标/Java 版本对齐根 pom，恢复全仓可编译。
-         B 组原 pom 为独立工程（parent=spring-boot-starter-parent 3.3.5、
-         坐标 com.cloudstorage:cloud-storage-storage、Java 21），进仓即破坏构建。
-         注意：B 组 Java 代码包名 com.cloudstorage.storage 仍不在启动类扫描包
-         （com.company.cloud）内，B 组 Bean 暂不挂载，待其按契约整改后恢复。 -->
     <parent>
         <groupId>com.company.cloud</groupId>
         <artifactId>cloud-server</artifactId>
@@ -24,6 +19,11 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.company.cloud</groupId>
+            <artifactId>cloud-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

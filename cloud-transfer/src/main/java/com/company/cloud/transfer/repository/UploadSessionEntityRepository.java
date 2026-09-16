@@ -1,6 +1,6 @@
-package com.cloudstorage.storage.repository;
+package com.company.cloud.transfer.repository;
 
-import com.cloudstorage.storage.entity.UploadSessionEntity;
+import com.company.cloud.transfer.entity.UploadSessionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.OffsetDateTime;

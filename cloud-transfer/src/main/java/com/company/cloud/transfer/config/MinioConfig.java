@@ -1,7 +1,9 @@
-package com.cloudstorage.storage.config;
+package com.company.cloud.transfer.config;
 
+import com.company.cloud.transfer.service.MinioStorageService;
 import io.minio.MinioAsyncClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -31,5 +33,21 @@ public class MinioConfig {
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey)
                 .build();
+    }
+
+    /**
+     * 启动时确保 MinIO bucket 存在。
+     * MinIO 未就绪时仅告警、不阻塞启动，方便先起来看接口。
+     */
+    @Bean
+    CommandLineRunner ensureStorageBucket(MinioStorageService minio) {
+        return args -> {
+            try {
+                minio.ensureBucket();
+                System.out.println("[transfer] MinIO bucket 已就绪");
+            } catch (Exception e) {
+                System.err.println("[transfer] 警告：MinIO 不可用，bucket 未确认 —— " + e.getMessage());
+            }
+        };
     }
 }

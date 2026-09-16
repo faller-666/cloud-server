@@ -28,6 +28,17 @@ public enum ErrorCode {
     QUOTA_TOO_LOW(42101, "配额不能低于当前已用量"),
     ACCOUNT_LOCKED(42301, "失败次数过多，账号已临时锁定"),
 
+    // ---- 传输（B 组 402xx）----
+    PART_INDEX_OUT_OF_RANGE(40201, "分片序号越界"),
+    PART_SIZE_EXCEEDED(40202, "分片大小超过上限"),
+    FILE_SIZE_INVALID(40203, "文件大小非法"),
+    FILE_TOO_LARGE(40204, "文件过大，单次最大支持 10GB"),
+    EXTENSION_NOT_ALLOWED(40205, "该类型文件不允许上传"),
+    UPLOAD_SESSION_NOT_FOUND(40206, "上传会话不存在或已过期"),
+    PARTS_INCOMPLETE(40207, "分片未传完整，请继续上传"),
+    STORAGE_QUOTA_EXCEEDED(40208, "空间不足，请清理后重试"),
+    SHA256_REQUIRED(40209, "缺少文件哈希（sha256），无法初始化上传"),
+
     // ---- 文件管理（C 组 403xx）----
     FILE_NOT_FOUND(40304, "文件或目录不存在"),
     FILE_NAME_CONFLICT(40309, "同级存在同名文件"),

@@ -1,4 +1,3 @@
-$c = @'
 # Compiled class file
 *.class
 
@@ -57,5 +56,8 @@ Thumbs.db
 # ---- 应用日志 ----
 logs/
 *.log.*
-'@
-[System.IO.File]::WriteAllText("$PWD\.gitignore", $c)
+
+# ---- 二进制/临时垃圾（B 组整改项 5）----
+*.bin
+part*
+init*.json

@@ -1,13 +1,12 @@
-package com.cloudstorage.storage.service;
+package com.company.cloud.transfer.service;
 
-import com.cloudstorage.storage.entity.FileEntity;
-import com.cloudstorage.storage.entity.FileHashEntity;
-import com.cloudstorage.storage.entity.UploadSessionEntity;
-import com.cloudstorage.storage.exception.BizException;
-import com.cloudstorage.storage.repository.FileEntityRepository;
-import com.cloudstorage.storage.repository.FileHashEntityRepository;
-import com.cloudstorage.storage.repository.UploadSessionEntityRepository;
-import com.cloudstorage.storage.repository.UserQuotaRepository;
+import com.company.cloud.common.result.BizException;
+import com.company.cloud.common.result.ErrorCode;
+import com.company.cloud.transfer.entity.FileEntity;
+import com.company.cloud.transfer.entity.UploadSessionEntity;
+import com.company.cloud.transfer.repository.FileEntityRepository;
+import com.company.cloud.transfer.repository.UploadSessionEntityRepository;
+import com.company.cloud.transfer.repository.UserQuotaRepository;
 import io.minio.messages.Part;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,6 +28,9 @@ import java.util.Set;
  *  R-B05 complete / R-B06 配额防超卖 / R-B07 下载签发 / R-B08 24h 会话清理 /
  *  R-B09 大小与扩展名限制 / R-B10 引用计数维护（供 C 组）。
  *
+ * 内容寻址：对象 key = objects/<sha256>，同内容全站同 key 天然去重；
+ * 引用计数归 files 表 ref_count（对齐 spec），彻底删除时按「是否仍有存活文件记录」判断是否物理删对象。
+ *
  * 说明：complete 的「MinIO 合并」与「DB 落库」跨系统无法用 DB 事务原子化，
  * 靠「幂等重试 + 脏对象对账清理」兜底，与任务书验收「重启可续、无脏数据」一致。
  */
@@ -41,7 +43,6 @@ public class UploadService {
 
     private final MinioStorageService minio;
     private final FileEntityRepository fileRepo;
-    private final FileHashEntityRepository hashRepo;
     private final UploadSessionEntityRepository sessionRepo;
     private final UserQuotaRepository quotaRepo;
 
@@ -52,7 +53,6 @@ public class UploadService {
 
     public UploadService(MinioStorageService minio,
                          FileEntityRepository fileRepo,
-                         FileHashEntityRepository hashRepo,
                          UploadSessionEntityRepository sessionRepo,
                          UserQuotaRepository quotaRepo,
                          @Value("${upload.max-file-size:10737418240}") long maxFileSize,
@@ -61,7 +61,6 @@ public class UploadService {
                          @Value("${upload.session-ttl-hours:24}") int sessionTtlHours) {
         this.minio = minio;
         this.fileRepo = fileRepo;
-        this.hashRepo = hashRepo;
         this.sessionRepo = sessionRepo;
         this.quotaRepo = quotaRepo;
         this.maxFileSize = maxFileSize;
@@ -75,34 +74,32 @@ public class UploadService {
     public InitResult init(Long userId, String name, long size, Long parentId, String sha256) {
         validateSize(size);
         validateExtension(name);
+        validateSha256(sha256);
 
-        // 秒传分支：sha256 命中 file_hashes → 零字节传输，直接完成
-        if (hasText(sha256)) {
-            Optional<FileHashEntity> hit = hashRepo.findBySha256(sha256);
-            if (hit.isPresent()) {
-                FileHashEntity h = hit.get();
-                // 预扣配额（条件 UPDATE 防超卖）
-                if (!quotaRepo.tryReserve(userId, size)) {
-                    throw new BizException(40901, "空间不足，请清理后重试");
-                }
-                hashRepo.incrementRefCount(sha256);
-                FileEntity f = fileRepo.save(FileEntity.builder()
-                        .ownerId(userId).parentId(parentId).name(name)
-                        .isDir(false).sizeBytes(size)
-                        .sha256(sha256).storageKey(h.getStorageKey())
-                        .build());
-                return InitResult.done(f.getId());
+        long targetParent = parentId == null ? 0L : parentId;
+
+        // 秒传分支：sha256 命中存活 files 记录 → 零字节传输，直接复用对象
+        Optional<FileEntity> hit = fileRepo.findFirstBySha256AndDeletedAtIsNull(sha256);
+        if (hit.isPresent()) {
+            // 预扣配额（条件 UPDATE 防超卖）
+            if (!quotaRepo.tryReserve(userId, size)) {
+                throw new BizException(ErrorCode.STORAGE_QUOTA_EXCEEDED);
             }
+            FileEntity f = fileRepo.save(FileEntity.builder()
+                    .ownerId(userId).parentId(targetParent).name(name)
+                    .isDir(false).size(size).sha256(sha256).refCount(1)
+                    .build());
+            return InitResult.done(f.getId());
         }
 
         // 未命中：预检配额（只读快速拒绝）
         if (!quotaRepo.checkAvailable(userId, size)) {
-            throw new BizException(40901, "空间不足，请清理后重试");
+            throw new BizException(ErrorCode.STORAGE_QUOTA_EXCEEDED);
         }
 
-        // 先落会话（拿 id 定对象 key），再建 MinIO multipart，最后回填 uploadId
+        // 先落会话（拿 id），再建 MinIO multipart，最后回填 uploadId
         UploadSessionEntity s = sessionRepo.save(UploadSessionEntity.builder()
-                .userId(userId).uploadId("PENDING").targetParent(parentId)
+                .userId(userId).uploadId("PENDING").targetParent(targetParent)
                 .name(name).sha256(sha256).sizeBytes(size)
                 .chunkSize(minio.partSize()).status(STATUS_UPLOADING)
                 .expiresAt(OffsetDateTime.now().plusHours(sessionTtlHours))
@@ -110,9 +107,9 @@ public class UploadService {
 
         String uploadId;
         try {
-            uploadId = minio.initMultipart(objectKeyOf(s));
+            uploadId = minio.initMultipart(objectKeyOf(sha256));
         } catch (Exception e) {
-            throw new BizException(50001, "初始化上传失败");
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "初始化上传失败");
         }
         s.setUploadId(uploadId);
         sessionRepo.save(s);
@@ -124,21 +121,21 @@ public class UploadService {
     public void part(Long userId, Long sessionId, int partNo, InputStream stream, long size) {
         UploadSessionEntity s = ownedSession(userId, sessionId);
         if (!STATUS_UPLOADING.equals(s.getStatus())) {
-            throw new BizException(40410, "上传会话不存在或已过期");
+            throw new BizException(ErrorCode.UPLOAD_SESSION_NOT_FOUND);
         }
         long expectedChunks = chunkCount(s.getSizeBytes(), s.getChunkSize());
         if (partNo < 1 || partNo > expectedChunks) {
-            throw new BizException(40001, "分片序号越界");
+            throw new BizException(ErrorCode.PART_INDEX_OUT_OF_RANGE);
         }
         if (size > s.getChunkSize()) {
-            throw new BizException(40002, "分片大小超过上限");
+            throw new BizException(ErrorCode.PART_SIZE_EXCEEDED);
         }
         try {
             // 同一 partNo 重复上传幂等覆盖（MinIO 原生行为）
-            minio.uploadPart(objectKeyOf(s), s.getUploadId(), partNo, stream, size);
+            minio.uploadPart(objectKeyOf(s.getSha256()), s.getUploadId(), partNo, stream, size);
         } catch (Exception e) {
             Throwable root = e.getCause() != null ? e.getCause() : e;
-            throw new BizException(50002, "分片上传失败: " + root.getMessage());
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "分片上传失败: " + root.getMessage());
         }
     }
 
@@ -148,17 +145,17 @@ public class UploadService {
         List<Integer> uploaded = new ArrayList<>();
         List<PartInfo> detail = new ArrayList<>();
         try {
-            for (Part p : minio.listParts(objectKeyOf(s), s.getUploadId())) {
+            for (Part p : minio.listParts(objectKeyOf(s.getSha256()), s.getUploadId())) {
                 uploaded.add(p.partNumber());
                 detail.add(new PartInfo(p.partNumber(), p.partSize()));
             }
         } catch (Exception e) {
-            throw new BizException(50003, "查询上传会话失败");
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "查询上传会话失败");
         }
         return new SessionStatus(s.getId(), s.getStatus(), s.getUploadId(), s.getChunkSize(), uploaded, detail);
     }
 
-    // ============ R-B05/R-B06：complete（可重试 + 秒传去重 + 实扣配额） ============
+    // ============ R-B05/R-B06：complete（可重试 + 实扣配额） ============
     @Transactional
     public CompleteResult complete(Long userId, Long sessionId) {
         UploadSessionEntity s = ownedSession(userId, sessionId);
@@ -166,17 +163,17 @@ public class UploadService {
             return new CompleteResult(s.getFileId(), true); // 幂等重试
         }
         if (!STATUS_UPLOADING.equals(s.getStatus())) {
-            throw new BizException(40410, "上传会话不存在或已过期");
+            throw new BizException(ErrorCode.UPLOAD_SESSION_NOT_FOUND);
         }
 
-        String objectKey = objectKeyOf(s);
+        String objectKey = objectKeyOf(s.getSha256());
         // 校验分片完整并合并
         String partsDebug = "";
         try {
             List<Part> parts = minio.listParts(objectKey, s.getUploadId());
             long expected = chunkCount(s.getSizeBytes(), s.getChunkSize());
             if (parts.size() != expected) {
-                throw new BizException(40902, "分片未传完整，请继续上传");
+                throw new BizException(ErrorCode.PARTS_INCOMPLETE);
             }
             StringBuilder sb = new StringBuilder();
             List<Part> simple = new ArrayList<>();
@@ -189,37 +186,22 @@ public class UploadService {
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {
-            throw new BizException(50004, "合并分片失败: " + e.getClass().getSimpleName() + " - " + e.getMessage() + " | MinIO分片=" + partsDebug);
+            throw new BizException(ErrorCode.SYSTEM_ERROR,
+                    "合并分片失败: " + e.getClass().getSimpleName() + " - " + e.getMessage() + " | MinIO分片=" + partsDebug);
         }
 
         // 实扣配额（条件 UPDATE 原子防超卖）
         if (!quotaRepo.tryReserve(userId, s.getSizeBytes())) {
             try { minio.removeObject(objectKey); } catch (Exception ignored) { }
-            throw new BizException(40901, "空间不足，请清理后重试");
+            throw new BizException(ErrorCode.STORAGE_QUOTA_EXCEEDED);
         }
 
-        // 写元数据 + 引用计数（秒传去重）
-        String storageKey = objectKey;
-        if (hasText(s.getSha256())) {
-            FileHashEntity hash = hashRepo.findBySha256(s.getSha256()).orElse(null);
-            if (hash != null) {
-                // 并发下同内容已存在：复用已有对象，引用计数 +1
-                storageKey = hash.getStorageKey();
-                if (!storageKey.equals(objectKey)) {
-                    try { minio.removeObject(objectKey); } catch (Exception ignored) { }
-                }
-                hashRepo.incrementRefCount(s.getSha256());
-            } else {
-                hashRepo.save(FileHashEntity.builder()
-                        .sha256(s.getSha256()).storageKey(objectKey)
-                        .sizeBytes(s.getSizeBytes()).refCount(1).build());
-            }
-        }
-
+        // 写元数据（对象为内容寻址 objects/<sha256>，引用计数归 files 表 ref_count）
         FileEntity saved = fileRepo.save(FileEntity.builder()
-                .ownerId(userId).parentId(s.getTargetParent()).name(s.getName())
-                .isDir(false).sizeBytes(s.getSizeBytes())
-                .sha256(s.getSha256()).storageKey(storageKey)
+                .ownerId(userId)
+                .parentId(s.getTargetParent() == null ? 0L : s.getTargetParent())
+                .name(s.getName()).isDir(false).size(s.getSizeBytes())
+                .sha256(s.getSha256()).refCount(1)
                 .build());
 
         s.setFileId(saved.getId());
@@ -233,7 +215,7 @@ public class UploadService {
     public void abort(Long userId, Long sessionId) {
         UploadSessionEntity s = ownedSession(userId, sessionId);
         if (STATUS_UPLOADING.equals(s.getStatus())) {
-            try { minio.abortMultipart(objectKeyOf(s), s.getUploadId()); } catch (Exception ignored) { }
+            try { minio.abortMultipart(objectKeyOf(s.getSha256()), s.getUploadId()); } catch (Exception ignored) { }
             s.setStatus(STATUS_ABORTED);
             sessionRepo.save(s);
         }
@@ -242,15 +224,15 @@ public class UploadService {
     // ============ R-B07：下载签发 ============
     public String presignDownload(Long userId, Long fileId) {
         FileEntity f = fileRepo.findById(fileId)
-                .orElseThrow(() -> new BizException(40400, "文件不存在"));
+                .orElseThrow(() -> new BizException(ErrorCode.FILE_NOT_FOUND));
         if (!f.getOwnerId().equals(userId) || f.getDeletedAt() != null) {
-            throw new BizException(40300, "无权访问");
+            throw new BizException(ErrorCode.FORBIDDEN);
         }
         try {
-            // 3 分钟/5 分钟预签名 URL；字节流走 Nginx → MinIO，不过应用进程
-            return minio.presignGet(f.getStorageKey(), presignExpirySeconds);
+            // 5 分钟预签名 URL；字节流走 Nginx → MinIO，不过应用进程
+            return minio.presignGet(objectKeyOf(f.getSha256()), presignExpirySeconds);
         } catch (Exception e) {
-            throw new BizException(50005, "生成下载地址失败");
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "生成下载地址失败");
         }
     }
 
@@ -261,7 +243,7 @@ public class UploadService {
                 .findByStatusAndExpiresAtBefore(STATUS_UPLOADING, OffsetDateTime.now());
         int cleaned = 0;
         for (UploadSessionEntity s : expired) {
-            try { minio.abortMultipart(objectKeyOf(s), s.getUploadId()); } catch (Exception ignored) { }
+            try { minio.abortMultipart(objectKeyOf(s.getSha256()), s.getUploadId()); } catch (Exception ignored) { }
             s.setStatus(STATUS_ABORTED);
             sessionRepo.save(s);
             cleaned++;
@@ -271,29 +253,30 @@ public class UploadService {
 
     // ============ R-B10：引用计数维护（供 C 组彻底删除调用） ============
     @Transactional
-    public void decrementRef(String sha256) {
-        if (!hasText(sha256)) return;
-        hashRepo.decrementRefCount(sha256);
-        FileHashEntity h = hashRepo.findById(sha256).orElse(null);
-        if (h != null && h.getRefCount() <= 0) {
-            try { minio.removeObject(h.getStorageKey()); } catch (Exception ignored) { }
-            hashRepo.deleteById(sha256);
+    public void decrementRef(String sha256, long fileSize) {
+        if (!hasText(sha256)) {
+            return;
+        }
+        // 仍存在存活文件记录 → 内容对象仍有引用，不删；否则物理删除 MinIO 对象
+        long alive = fileRepo.countBySha256AndDeletedAtIsNull(sha256);
+        if (alive <= 0) {
+            try { minio.removeObject(objectKeyOf(sha256)); } catch (Exception ignored) { }
         }
     }
 
     // ============ 私有工具 ============
     private UploadSessionEntity ownedSession(Long userId, Long sessionId) {
         UploadSessionEntity s = sessionRepo.findById(sessionId)
-                .orElseThrow(() -> new BizException(40410, "上传会话不存在或已过期"));
+                .orElseThrow(() -> new BizException(ErrorCode.UPLOAD_SESSION_NOT_FOUND));
         if (!s.getUserId().equals(userId)) {
-            throw new BizException(40300, "无权访问");
+            throw new BizException(ErrorCode.FORBIDDEN);
         }
         return s;
     }
 
-    /** 对象 key：有哈希按内容寻址（同内容同 key，天然去重），否则按会话 id。 */
-    private String objectKeyOf(UploadSessionEntity s) {
-        return hasText(s.getSha256()) ? "objects/" + s.getSha256() : "uploads/session-" + s.getId();
+    /** 对象 key：内容寻址 objects/<sha256>（同内容同 key，天然去重）。 */
+    private String objectKeyOf(String sha256) {
+        return "objects/" + sha256;
     }
 
     private long chunkCount(long size, int chunkSize) {
@@ -305,16 +288,22 @@ public class UploadService {
     }
 
     private void validateSize(long size) {
-        if (size <= 0) throw new BizException(40003, "文件大小非法");
-        if (size > maxFileSize) throw new BizException(41301, "文件过大，单次最大支持 10GB");
+        if (size <= 0) throw new BizException(ErrorCode.FILE_SIZE_INVALID);
+        if (size > maxFileSize) throw new BizException(ErrorCode.FILE_TOO_LARGE);
     }
 
     private void validateExtension(String name) {
         if (allowedExtensions.isEmpty()) return;
         int dot = name.lastIndexOf('.');
-        if (dot < 0) throw new BizException(41501, "该类型文件不允许上传");
+        if (dot < 0) throw new BizException(ErrorCode.EXTENSION_NOT_ALLOWED);
         String ext = name.substring(dot + 1).toLowerCase();
-        if (!allowedExtensions.contains(ext)) throw new BizException(41501, "该类型文件不允许上传");
+        if (!allowedExtensions.contains(ext)) throw new BizException(ErrorCode.EXTENSION_NOT_ALLOWED);
+    }
+
+    private void validateSha256(String sha256) {
+        if (!hasText(sha256)) {
+            throw new BizException(ErrorCode.SHA256_REQUIRED);
+        }
     }
 
     private Set<String> parseExtensions(String csv) {
@@ -337,7 +326,8 @@ public class UploadService {
         }
     }
 
-    public record SessionStatus(Long sessionId, String status, String uploadId, int chunkSize, List<Integer> uploadedParts, List<PartInfo> partsDetail) { }
+    public record SessionStatus(Long sessionId, String status, String uploadId, int chunkSize,
+                                List<Integer> uploadedParts, List<PartInfo> partsDetail) { }
 
     public record PartInfo(int partNumber, long size) { }
 

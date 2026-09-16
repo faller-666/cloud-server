@@ -1,4 +1,4 @@
-package com.cloudstorage.storage.entity;
+package com.company.cloud.transfer.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -6,8 +6,14 @@ import lombok.*;
 import java.time.OffsetDateTime;
 
 /**
- * files 表（B 组 Owner）。
- * 索引见 migration V2（idx_files_dir / idx_files_trash），不在 Entity 重复声明。
+ * files 表（B 组 Owner）——对齐 docs/files-table-spec.md 组间约定结构。
+ *
+ * 结构约定：
+ *  - size（非 size_bytes）
+ *  - parent_id NOT NULL DEFAULT 0（0 = 根目录）
+ *  - sha256 TEXT（秒传哈希，目录为 null）
+ *  - ref_count INT（引用计数，目录为 0）
+ *  - 无 mime / storage_key 冗余字段（对象 key 由 sha256 推导 "objects/<sha256>"）
  */
 @Entity
 @Table(name = "files")
@@ -25,8 +31,8 @@ public class FileEntity {
     @Column(name = "owner_id", nullable = false)
     private Long ownerId;
 
-    /** 父目录 id，NULL 为根。 */
-    @Column(name = "parent_id")
+    /** 父目录 id，0 表示根目录。 */
+    @Column(name = "parent_id", nullable = false)
     private Long parentId;
 
     @Column(nullable = false)
@@ -35,18 +41,17 @@ public class FileEntity {
     @Column(name = "is_dir", nullable = false)
     private boolean isDir;
 
-    @Column(name = "size_bytes", nullable = false)
-    private long sizeBytes;
+    /** 字节数（目录为 0）。 */
+    @Column(nullable = false)
+    private long size;
 
-    private String mime;
-
-    /** 文件级哈希，关联 file_hashes（秒传去重）。 */
-    @Column(length = 64)
+    /** 文件级哈希（秒传用），目录为 null。 */
+    @Column(columnDefinition = "text")
     private String sha256;
 
-    /** MinIO 对象 key。 */
-    @Column(name = "storage_key")
-    private String storageKey;
+    /** 引用计数（秒传去重用），目录为 0。 */
+    @Column(name = "ref_count", nullable = false)
+    private Integer refCount;
 
     /** 回收站软删标记（C 组维护），非空即已入回收站。 */
     @Column(name = "deleted_at")

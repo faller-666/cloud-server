@@ -10,6 +10,15 @@ spring:
   application:
     name: cloud-server
 
+  # 虚拟线程：I/O 密集的分片流式转发，每请求一个轻量虚拟线程
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    formcontent:
+      filter:
+        enabled: false   # 禁用 FormContentFilter，否则 PUT 二进制分片 body 被消费（EntityTooSmall 根因）
+
   # 数据库：PostgreSQL 16，仅容器网可达（Compose 服务名 postgres）
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cloud}
@@ -83,3 +92,19 @@ app:
     rate-limit-per-minute: ${SECURITY_RATE_LIMIT_PER_MINUTE:5}
   role:
     default-quota-bytes: ${DEFAULT_QUOTA_BYTES:21474836480}
+
+# B 组 传输域配置（MinIO 对象存储，本地开发默认，生产用环境变量覆盖）
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: cloud-files
+
+upload:
+  part-size: 8388608          # 8MB 单片
+  max-file-size: 10737418240  # 10GB 上限
+  allowed-extensions: ""      # 留空 = 不限制扩展名
+  session-ttl-hours: 24       # 会话 24h 过期
+
+download:
+  presign-expiry-seconds: 300 # 下载预签名 5 分钟

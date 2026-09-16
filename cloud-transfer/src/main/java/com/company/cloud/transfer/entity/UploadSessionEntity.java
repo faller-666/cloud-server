@@ -1,4 +1,4 @@
-package com.cloudstorage.storage.entity;
+package com.company.cloud.transfer.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -35,8 +35,8 @@ public class UploadSessionEntity {
     @Column(nullable = false)
     private String name;
 
-    /** 文件级哈希（init 时存，complete 写 file_hashes 与秒传去重用）。 */
-    @Column(length = 64)
+    /** 文件级哈希（init 时存，complete 写 files 表与秒传去重用）。 */
+    @Column(columnDefinition = "text")
     private String sha256;
 
     @Column(name = "size_bytes", nullable = false)

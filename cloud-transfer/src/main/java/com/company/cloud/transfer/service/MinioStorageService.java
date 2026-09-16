@@ -1,4 +1,4 @@
-package com.cloudstorage.storage.service;
+package com.company.cloud.transfer.service;
 
 import io.minio.*;
 import io.minio.messages.Part;
