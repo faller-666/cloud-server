@@ -1,5 +1,6 @@
 package com.company.cloud.files.dir.service;
 
+import com.company.cloud.files.dir.dto.BatchMoveRequest;
 import com.company.cloud.files.dir.dto.DirListResponse;
 import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.dir.dto.MkdirRequest;
@@ -23,6 +24,9 @@ public interface FileNodeService {
 
     /** R-C03：重命名 / 移动（禁止移入自身子目录；目标重名自动改名） */
     FileNodeVO update(Long userId, Long id, UpdateNodeRequest request);
+
+    /** 批量移动（前端多选拖拽）：同一目标目录，任一失败整体回滚 */
+    List<FileNodeVO> batchMove(Long userId, BatchMoveRequest request);
 
     /** R-C04：删除入回收站（级联软删全部子孙；幂等） */
     void delete(Long userId, Long id);
