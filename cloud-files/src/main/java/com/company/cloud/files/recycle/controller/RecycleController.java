@@ -3,6 +3,7 @@ package com.company.cloud.files.recycle.controller;
 import com.company.cloud.common.result.PageResult;
 import com.company.cloud.common.result.Result;
 import com.company.cloud.files.dir.dto.FileNodeVO;
+import com.company.cloud.files.recycle.dto.RecycleItemVO;
 import com.company.cloud.files.recycle.service.RecycleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,9 +30,9 @@ public class RecycleController {
 
     private final RecycleService recycleService;
 
-    @Operation(summary = "回收站列表（R-C05）：仅顶层被删节点，按删除时间倒序")
+    @Operation(summary = "回收站列表（R-C05）：仅顶层被删节点，按删除时间倒序；含 deletedAt/expireAt")
     @GetMapping("/trash")
-    public Result<PageResult<FileNodeVO>> list(
+    public Result<PageResult<RecycleItemVO>> list(
             @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {

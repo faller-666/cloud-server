@@ -10,6 +10,7 @@ import com.company.cloud.common.result.PageResult;
 import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.dir.entity.FileNode;
 import com.company.cloud.files.dir.mapper.FileNodeMapper;
+import com.company.cloud.files.recycle.dto.RecycleItemVO;
 import com.company.cloud.files.recycle.dto.SubtreeFile;
 import com.company.cloud.files.recycle.ref.RefCountClient;
 import com.company.cloud.files.recycle.service.RecycleService;
@@ -31,9 +32,9 @@ public class RecycleServiceImpl implements RecycleService {
     // ---------- R-C05 回收站列表 ----------
 
     @Override
-    public PageResult<FileNodeVO> list(Long userId, int page, int size) {
+    public PageResult<RecycleItemVO> list(Long userId, int page, int size) {
         Page<FileNode> result = mapper.selectRecycleTopPage(Page.of(page, size), userId);
-        List<FileNodeVO> list = result.getRecords().stream().map(FileNodeVO::from).toList();
+        List<RecycleItemVO> list = result.getRecords().stream().map(RecycleItemVO::from).toList();
         return PageResult.of(result.getTotal(), list);
     }
 

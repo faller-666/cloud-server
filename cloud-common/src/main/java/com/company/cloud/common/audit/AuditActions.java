@@ -26,6 +26,8 @@ public final class AuditActions {
     public static final String DELETE_FORCE = "delete_force";
     /** 从回收站恢复（C 组） */
     public static final String RESTORE = "restore";
+    /** 移动文件/目录（C 组，含前端拖拽移动；detail 带 fromParentId/toParentId） */
+    public static final String MOVE = "move";
     /** 配额变更（A 组调用） */
     public static final String QUOTA_CHANGE = "quota_change";
     /** 用户管理操作（A 组调用：新建/禁用/重置密码等，细分动作放 detail） */
