@@ -95,10 +95,10 @@ app:
 
 # B 组 传输域配置（MinIO 对象存储，本地开发默认，生产用环境变量覆盖）
 minio:
-  endpoint: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin
-  bucket: cloud-files
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:cloud-files}
 
 upload:
   part-size: 8388608          # 8MB 单片
