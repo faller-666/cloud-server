@@ -4,35 +4,26 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- 临时归位（C 组止血）：parent/坐标/Java 版本对齐根 pom，恢复全仓可编译。
+         B 组原 pom 为独立工程（parent=spring-boot-starter-parent 3.3.5、
+         坐标 com.cloudstorage:cloud-storage-storage、Java 21），进仓即破坏构建。
+         注意：B 组 Java 代码包名 com.cloudstorage.storage 仍不在启动类扫描包
+         （com.company.cloud）内，B 组 Bean 暂不挂载，待其按契约整改后恢复。 -->
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
-        <relativePath/>
+        <groupId>com.company.cloud</groupId>
+        <artifactId>cloud-server</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.cloudstorage</groupId>
-    <artifactId>cloud-storage-storage</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>storage</name>
+    <artifactId>cloud-transfer</artifactId>
+    <name>cloud-transfer</name>
     <description>后端 B 组：文件传输核心（分片上传/断点续传/秒传/下载签发/配额扣减）</description>
 
     <properties>
-        <java.version>21</java.version>
         <minio.version>9.0.3</minio.version>
     </properties>
 
     <dependencies>
-        <!--
-          common 共享底座（统一返回/异常/错误码/Security）由 A 组交付 AuthGuard 后并入；
-          当前先保持 storage 独立可编译，取当前用户 id 用占位，后续切到 common 的 SecurityUtil。
-        <dependency>
-            <groupId>com.cloudstorage</groupId>
-            <artifactId>cloud-storage-common</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        -->
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -46,7 +37,7 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Flyway：表结构走 migration（本地最小可运行版也依赖它建表，避免 ddl-auto 丢 DEFAULT） -->
+        <!-- Flyway：表结构走 migration -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -76,12 +67,4 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 </project>
