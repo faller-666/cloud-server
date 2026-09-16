@@ -1,6 +1,7 @@
 package com.company.cloud.files.dir.controller;
 
 import com.company.cloud.common.result.Result;
+import com.company.cloud.files.dir.dto.BatchMoveRequest;
 import com.company.cloud.files.dir.dto.DirListResponse;
 import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.dir.dto.MkdirRequest;
@@ -72,6 +73,14 @@ public class FileNodeController {
             @PathVariable Long id,
             @Valid @RequestBody UpdateNodeRequest request) {
         return Result.ok(fileNodeService.update(userId, id, request));
+    }
+
+    @Operation(summary = "批量移动：多选文件/目录一次移入同一目标目录，任一失败整体回滚")
+    @PatchMapping("/batch-move")
+    public Result<java.util.List<FileNodeVO>> batchMove(
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "1") Long userId,
+            @Valid @RequestBody BatchMoveRequest request) {
+        return Result.ok(fileNodeService.batchMove(userId, request));
     }
 
     @Operation(summary = "删除（R-C04/R-C06）：默认入回收站；?force=1 彻底删除（级联物理删+释放配额）")

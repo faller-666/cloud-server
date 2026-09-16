@@ -7,6 +7,7 @@ import com.company.cloud.common.audit.AuditEvent;
 import com.company.cloud.common.audit.AuditService;
 import com.company.cloud.common.result.BizException;
 import com.company.cloud.common.result.ErrorCode;
+import com.company.cloud.files.dir.dto.BatchMoveRequest;
 import com.company.cloud.files.dir.dto.DirListResponse;
 import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.dir.dto.MkdirRequest;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -163,6 +165,42 @@ public class FileNodeServiceImpl implements FileNodeService {
                             "toParentId", targetParent)));
         }
         return FileNodeVO.from(node);
+    }
+
+    // ---------- 批量移动（前端多选拖拽） ----------
+
+    @Override
+    @Transactional
+    public List<FileNodeVO> batchMove(Long userId, BatchMoveRequest request) {
+        long targetParent = request.targetParentId();
+        if (targetParent > 0) {
+            requireOwnedDir(userId, targetParent);
+        }
+
+        List<FileNodeVO> moved = new ArrayList<>();
+        for (Long id : request.ids()) {
+            FileNode node = requireOwnedNode(userId, id);
+            long currentParent = node.getParentId() == null ? 0L : node.getParentId();
+            if (currentParent == targetParent) {
+                // 已在目标目录，跳过不记审计
+                moved.add(FileNodeVO.from(node));
+                continue;
+            }
+            if (targetParent > 0 && mapper.countInSubtree(id, targetParent) > 0) {
+                throw new BizException(ErrorCode.MOVE_INTO_SUBDIR);
+            }
+            node.setParentId(targetParent);
+            node.setName(resolveUniqueName(userId, targetParent, node.getName()));
+            mapper.updateById(node);
+
+            auditService.record(new AuditEvent(
+                    userId, AuditActions.MOVE, String.valueOf(id), null,
+                    Map.of("name", node.getName(), "id", id,
+                            "fromParentId", currentParent,
+                            "toParentId", targetParent)));
+            moved.add(FileNodeVO.from(node));
+        }
+        return moved;
     }
 
     // ---------- R-C04 删除入回收站（级联软删） ----------

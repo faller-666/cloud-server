@@ -36,5 +36,8 @@ public class AuditLog {
     /** 扩展信息（JSON 文本，落库为 JSONB） */
     private String detail;
 
+    /** 执行结果（V2005 新增，现有只记成功事件，恒为 success） */
+    private String status;
+
     private OffsetDateTime createdAt;
 }
