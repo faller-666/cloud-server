@@ -77,7 +77,10 @@ public class AuthService {
         // 5. 解锁计数
         throttle.clearFailure(ip);
 
-        // 6. 签发双 token
+        // 6. 签发双 token；回填最近登录时间（V1002）
+        user.setLastLoginAt(java.time.OffsetDateTime.now());
+        userRepository.save(user);
+
         String access = jwtService.createAccessToken(user.getId(), user.getUsername(), user.getRole());
         String refresh = jwtService.createRefreshToken(user.getId(), user.getUsername(), user.getRole());
 
@@ -168,6 +171,9 @@ public class AuthService {
         m.put("quotaBytes", user.getQuotaBytes());
         m.put("usedBytes", user.getUsedBytes());
         m.put("mustChangePassword", user.getMustChangePassword());
+        m.put("nickname", user.getNickname());
+        m.put("email", user.getEmail());
+        m.put("lastLoginAt", user.getLastLoginAt());
         return m;
     }
 

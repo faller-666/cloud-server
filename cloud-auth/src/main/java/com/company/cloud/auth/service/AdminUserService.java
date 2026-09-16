@@ -73,6 +73,8 @@ public class AdminUserService {
                 .usedBytes(0L)
                 .status("active")
                 .mustChangePassword(true)   // 新用户首登强制改密
+                .nickname(req.getNickname())
+                .email(validateEmailUnique(req.getEmail(), null))
                 .build();
         userRepository.save(user);
         log.info("[admin] 创建用户 username={} role={} quota={}", user.getUsername(), role, quota);
@@ -107,7 +109,29 @@ public class AdminUserService {
             user.setQuotaBytes(req.getQuotaBytes());
             auditService.quotaChange(0L, id, oldQuota, req.getQuotaBytes());
         }
+        if (req.getNickname() != null) {
+            user.setNickname(req.getNickname());
+        }
+        if (req.getEmail() != null) {
+            user.setEmail(validateEmailUnique(req.getEmail(), id));
+        }
         userRepository.save(user);
+    }
+
+    /**
+     * 校验邮箱是否已被其他用户占用；通过则原样返回，空串归一为 null。
+     */
+    private String validateEmailUnique(String email, Long excludeId) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        String norm = email.trim();
+        userRepository.findByEmail(norm).ifPresent(existing -> {
+            if (excludeId == null || !existing.getId().equals(excludeId)) {
+                throw new BizException(ErrorCode.BAD_REQUEST, "邮箱已被使用：" + norm);
+            }
+        });
+        return norm;
     }
 
     /**
