@@ -29,7 +29,7 @@ spring:
   # 数据库变更一律走 Flyway migration，禁止手工改库（总纲 §5）
   flyway:
     enabled: true
-    locations: classpath*:db/migration
+    locations: classpath:db/migration
     baseline-on-migrate: true
 
   # JPA（A 组认证模块实体管理；ddl 一律以 Flyway 为准，仅校验）
