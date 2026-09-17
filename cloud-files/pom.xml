@@ -20,6 +20,12 @@
             <artifactId>cloud-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- cloud-auth：A 组统一鉴权（JWT + CurrentUser），C 组接口从 SecurityContext 取当前用户（与 B 组对齐） -->
+        <dependency>
+            <groupId>com.company.cloud</groupId>
+            <artifactId>cloud-auth</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
