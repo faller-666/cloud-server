@@ -7,7 +7,10 @@ import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -123,12 +126,19 @@ public class MinioStorageService {
                 .bucket(bucket).object(objectKey).build()));
     }
 
-    /** 签发下载预签名 URL（默认 5 分钟）。 */
-    public String presignGet(String objectKey, int expirySeconds) throws Exception {
+    /**
+     * 签发下载预签名 URL（默认 5 分钟），并设置 Content-Disposition，
+     * 让浏览器下载时按原始文件名（而非 objects/<sha256> 哈希名）保存。
+     */
+    public String presignGet(String objectKey, String downloadName, int expirySeconds) throws Exception {
+        String encoded = URLEncoder.encode(downloadName, StandardCharsets.UTF_8).replace("+", "%20");
+        String cd = "attachment; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded;
         return minio.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .method(Http.Method.GET)
                 .bucket(bucket).object(objectKey)
-                .expiry(expirySeconds).build());
+                .expiry(expirySeconds)
+                .extraQueryParams(Map.of("response-content-disposition", cd))
+                .build());
     }
 
     /** 转同步并解包 CompletableFuture 异常，让真正的 MinIO 错误原样冒泡。 */

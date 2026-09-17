@@ -234,7 +234,7 @@ public class UploadService {
         }
         try {
             // 5 分钟预签名 URL；字节流走 Nginx → MinIO，不过应用进程
-            return minio.presignGet(objectKeyOf(f.getSha256()), presignExpirySeconds);
+            return minio.presignGet(objectKeyOf(f.getSha256()), f.getName(), presignExpirySeconds);
         } catch (Exception e) {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "生成下载地址失败");
         }
