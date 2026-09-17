@@ -26,6 +26,12 @@
             <artifactId>cloud-auth</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- cloud-transfer：B 组存储能力（MinioStorageService），引用计数归零时物理删除 MinIO 对象。无循环依赖：transfer 仅依赖 common/auth。 -->
+        <dependency>
+            <groupId>com.company.cloud</groupId>
+            <artifactId>cloud-transfer</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

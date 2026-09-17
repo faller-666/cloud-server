@@ -125,6 +125,11 @@ public class MinioStorageService {
     }
 
     /** 物理删除对象（引用计数归 0 时调用）。 */
+    /** 内容对象的存储 key（objects/<sha256>）；key 规则收口在本模块，跨组调用方不得自行拼串。 */
+    public static String objectKeyOf(String sha256) {
+        return "objects/" + sha256;
+    }
+
     public void removeObject(String objectKey) throws Exception {
         await(minio.removeObject(RemoveObjectArgs.builder()
                 .bucket(bucket).object(objectKey).build()));
