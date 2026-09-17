@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * MinIO 客户端装配。
@@ -21,16 +22,38 @@ public class MinioConfig {
     @Value("${minio.endpoint}")
     private String endpoint;
 
+    @Value("${minio.public-endpoint:}")
+    private String publicEndpoint;
+
     @Value("${minio.access-key}")
     private String accessKey;
 
     @Value("${minio.secret-key}")
     private String secretKey;
 
+    /**
+     * 主客户端：应用侧直连 MinIO（multipart 上传、bucket 管理等）。
+     */
     @Bean
+    @Primary
     public MinioAsyncClient minioClient() {
         return MinioAsyncClient.builder()
                 .endpoint(endpoint)
+                .credentials(accessKey, secretKey)
+                .build();
+    }
+
+    /**
+     * 预签名专用客户端：下载 URL 的 host 需要外部（浏览器）可达，
+     * 与「应用访问 MinIO 的地址」解耦。public-endpoint 非空时用它构造，
+     * 为空时退回主 endpoint（保持旧行为）。
+     */
+    @Bean
+    public MinioAsyncClient presignClient() {
+        String host = (publicEndpoint == null || publicEndpoint.isBlank())
+                ? endpoint : publicEndpoint;
+        return MinioAsyncClient.builder()
+                .endpoint(host)
                 .credentials(accessKey, secretKey)
                 .build();
     }

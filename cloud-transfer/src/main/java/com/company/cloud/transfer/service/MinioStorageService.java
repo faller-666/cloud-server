@@ -2,6 +2,7 @@ package com.company.cloud.transfer.service;
 
 import io.minio.*;
 import io.minio.messages.Part;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -29,13 +30,16 @@ import java.util.concurrent.ExecutionException;
 public class MinioStorageService {
 
     private final MinioAsyncClient minio;
+    private final MinioAsyncClient presignClient;
     private final String bucket;
     private final int partSize;
 
     public MinioStorageService(MinioAsyncClient minio,
+                               @Qualifier("presignClient") MinioAsyncClient presignClient,
                                @Value("${minio.bucket}") String bucket,
                                @Value("${upload.part-size:8388608}") int partSize) {
         this.minio = minio;
+        this.presignClient = presignClient;
         this.bucket = bucket;
         this.partSize = partSize;
     }
@@ -129,11 +133,12 @@ public class MinioStorageService {
     /**
      * 签发下载预签名 URL（默认 5 分钟），并设置 Content-Disposition，
      * 让浏览器下载时按原始文件名（而非 objects/<sha256> 哈希名）保存。
+     * 使用预签名专用 client，确保 URL 的 host 是浏览器可达的 public-endpoint。
      */
     public String presignGet(String objectKey, String downloadName, int expirySeconds) throws Exception {
         String encoded = URLEncoder.encode(downloadName, StandardCharsets.UTF_8).replace("+", "%20");
         String cd = "attachment; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded;
-        return minio.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+        return presignClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .method(Http.Method.GET)
                 .bucket(bucket).object(objectKey)
                 .expiry(expirySeconds)
