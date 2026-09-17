@@ -64,3 +64,5 @@ init*.json
 
 # ---- 本地启动脚本（含明文密码，不入库）----
 start.bat
+# ---- Redis ----
+dump.rdb
