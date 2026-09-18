@@ -136,19 +136,69 @@ public class MinioStorageService {
     }
 
     /**
-     * 签发下载预签名 URL（默认 5 分钟），并设置 Content-Disposition，
-     * 让浏览器下载时按原始文件名（而非 objects/<sha256> 哈希名）保存。
+     * 签发下载/预览预签名 URL（默认 5 分钟）。
+     * 按文件扩展名补 response-content-type，覆盖 MinIO 因分片上传统一存的
+     * application/octet-stream（否则浏览器拒绝渲染图片/PDF/音视频）。
+     * inline=true 供预览（Content-Disposition=inline），否则供下载（attachment + 原始文件名）。
      * 使用预签名专用 client，确保 URL 的 host 是浏览器可达的 public-endpoint。
      */
-    public String presignGet(String objectKey, String downloadName, int expirySeconds) throws Exception {
-        String encoded = URLEncoder.encode(downloadName, StandardCharsets.UTF_8).replace("+", "%20");
-        String cd = "attachment; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded;
+    public String presignGet(String objectKey, String downloadName, int expirySeconds, boolean inline) throws Exception {
+        String contentType = contentTypeOf(downloadName);
+        String disposition;
+        if (inline) {
+            disposition = "inline";
+        } else {
+            String encoded = URLEncoder.encode(downloadName, StandardCharsets.UTF_8).replace("+", "%20");
+            disposition = "attachment; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded;
+        }
         return presignClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .method(Http.Method.GET)
                 .bucket(bucket).object(objectKey)
                 .expiry(expirySeconds)
-                .extraQueryParams(Map.of("response-content-disposition", cd))
+                .extraQueryParams(Map.of(
+                        "response-content-type", contentType,
+                        "response-content-disposition", disposition))
                 .build());
+    }
+
+    /** 按文件名扩展名推断 MIME 类型（预览/下载时补正确 Content-Type）。 */
+    private static String contentTypeOf(String name) {
+        if (name == null || name.isEmpty()) {
+            return "application/octet-stream";
+        }
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) {
+            return "application/octet-stream";
+        }
+        return switch (name.substring(dot + 1).toLowerCase()) {
+            case "png" -> "image/png";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "gif" -> "image/gif";
+            case "webp" -> "image/webp";
+            case "svg" -> "image/svg+xml";
+            case "bmp" -> "image/bmp";
+            case "ico" -> "image/x-icon";
+            case "pdf" -> "application/pdf";
+            case "mp4" -> "video/mp4";
+            case "mp3" -> "audio/mpeg";
+            case "m4a" -> "audio/mp4";
+            case "wav" -> "audio/wav";
+            case "ogg" -> "audio/ogg";
+            case "webm" -> "video/webm";
+            case "mov" -> "video/quicktime";
+            case "txt", "md", "log" -> "text/plain";
+            case "json" -> "application/json";
+            case "csv" -> "text/csv";
+            case "xml" -> "application/xml";
+            case "zip" -> "application/zip";
+            case "doc" -> "application/msword";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xls" -> "application/vnd.ms-excel";
+            case "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "ppt" -> "application/vnd.ms-powerpoint";
+            case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            default -> "application/octet-stream";
+        };
     }
 
     /** 转同步并解包 CompletableFuture 异常，让真正的 MinIO 错误原样冒泡。 */

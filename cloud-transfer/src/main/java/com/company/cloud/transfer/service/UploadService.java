@@ -226,7 +226,7 @@ public class UploadService {
     }
 
     // ============ R-B07：下载签发 ============
-    public String presignDownload(Long userId, Long fileId) {
+    public String presignDownload(Long userId, Long fileId, boolean inline) {
         FileEntity f = fileRepo.findById(fileId)
                 .orElseThrow(() -> new BizException(ErrorCode.FILE_NOT_FOUND));
         if (!f.getOwnerId().equals(userId) || f.getDeletedAt() != null) {
@@ -234,7 +234,8 @@ public class UploadService {
         }
         try {
             // 5 分钟预签名 URL；字节流走 Nginx → MinIO，不过应用进程
-            return minio.presignGet(objectKeyOf(f.getSha256()), f.getName(), presignExpirySeconds);
+            // inline=true 供预览（不强制 attachment），否则供下载（带文件名 attachment）
+            return minio.presignGet(objectKeyOf(f.getSha256()), f.getName(), presignExpirySeconds, inline);
         } catch (Exception e) {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "生成下载地址失败");
         }

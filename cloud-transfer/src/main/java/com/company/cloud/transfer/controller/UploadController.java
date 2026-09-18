@@ -77,8 +77,9 @@ public class UploadController {
     /** R-B07：换取 5 分钟预签名下载地址（owner 校验）。 */
     @GetMapping("/files/{id}/download")
     public Result<Map<String, String>> download(@PathVariable("id") Long id,
+                                                @RequestParam(required = false) Boolean inline,
                                                 Authentication authentication) {
-        String url = uploadService.presignDownload(currentUserId(authentication), id);
+        String url = uploadService.presignDownload(currentUserId(authentication), id, Boolean.TRUE.equals(inline));
         return Result.ok(Map.of("url", url));
     }
 
