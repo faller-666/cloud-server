@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 私有云存储平台启动类。
@@ -13,6 +14,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * 实例一 --server.port=3001，实例二 --server.port=3002，Nginx 反代负载。
  */
 @SpringBootApplication(scanBasePackages = "com.company.cloud")
+@EnableScheduling
 @MapperScan("com.company.cloud.**.mapper")
 @EntityScan("com.company.cloud")
 @EnableJpaRepositories("com.company.cloud.**.repository")

@@ -9,6 +9,7 @@ import com.company.cloud.transfer.repository.UploadSessionEntityRepository;
 import com.company.cloud.transfer.repository.UserQuotaRepository;
 import io.minio.messages.Part;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,6 +92,15 @@ public class UploadService {
                     .isDir(false).size(size).sha256(sha256).refCount(1)
                     .build());
             return InitResult.done(f.getId());
+        }
+
+        // 幂等续传：同 sha256 存在未过期、未完成的会话 → 复用（前端丢 sessionId 后可用 sha256 找回继续传）
+        Optional<UploadSessionEntity> existing = sessionRepo
+                .findFirstByUserIdAndSha256AndStatusAndExpiresAtAfter(
+                        userId, sha256, STATUS_UPLOADING, OffsetDateTime.now());
+        if (existing.isPresent() && !"PENDING".equals(existing.get().getUploadId())) {
+            UploadSessionEntity s = existing.get();
+            return InitResult.uploading(s.getId(), s.getUploadId(), s.getChunkSize());
         }
 
         // 未命中：预检配额（只读快速拒绝）
@@ -242,6 +252,7 @@ public class UploadService {
     }
 
     // ============ R-B08：24h 未完成会话清理 ============
+    @Scheduled(cron = "0 0 * * * *")  // 每小时整点：清理过期未完成会话 + abort MinIO multipart
     @Transactional
     public int cleanupExpiredSessions() {
         List<UploadSessionEntity> expired = sessionRepo
