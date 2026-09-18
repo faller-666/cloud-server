@@ -281,16 +281,19 @@ public class UploadService {
     }
 
     // ============ 私有工具 ============
-    /** 同级重名自动改名：base 被占用则追加 (2)(3)... 后缀（对齐 C 组 resolveUniqueName + uk_files_sibling_name）。 */
+    /** 同级重名自动改名：base 被占用则在扩展名前插入 (2)(3)... 序号（对齐 C 组 resolveUniqueName + uk_files_sibling_name）。 */
     private String resolveUniqueName(Long userId, long parentId, String base) {
         if (!fileRepo.existsByOwnerIdAndParentIdAndNameAndDeletedAtIsNull(userId, parentId, base)) {
             return base;
         }
+        int dot = base.lastIndexOf('.');
+        String stem = dot > 0 ? base.substring(0, dot) : base;
+        String ext = dot > 0 ? base.substring(dot) : "";
         int i = 2;
-        while (fileRepo.existsByOwnerIdAndParentIdAndNameAndDeletedAtIsNull(userId, parentId, base + " (" + i + ")")) {
+        while (fileRepo.existsByOwnerIdAndParentIdAndNameAndDeletedAtIsNull(userId, parentId, stem + " (" + i + ")" + ext)) {
             i++;
         }
-        return base + " (" + i + ")";
+        return stem + " (" + i + ")" + ext;
     }
 
     private UploadSessionEntity ownedSession(Long userId, Long sessionId) {

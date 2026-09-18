@@ -117,13 +117,13 @@ class RecycleServiceImplTest {
         when(mapper.selectById(5L)).thenReturn(node);
         // parentId=0 → resolveRestoreParent 直接返回根，不查父节点
         when(mapper.selectSiblingNames(eq(UID), eq(0L), eq("a.txt")))
-                .thenReturn(List.of("a.txt", "a.txt (2)"));
+                .thenReturn(List.of("a.txt", "a (2).txt"));
 
         service.restore(UID, 5L, null);
 
         ArgumentCaptor<FileNode> saved = ArgumentCaptor.forClass(FileNode.class);
         verify(mapper).updateById(saved.capture());
-        assertThat(saved.getValue().getName()).isEqualTo("a.txt (3)"); // 原名与 (2) 后缀均被占
+        assertThat(saved.getValue().getName()).isEqualTo("a (3).txt"); // 原名与 (2) 序号均被占
     }
 
     @Test

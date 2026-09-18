@@ -234,7 +234,8 @@ public class FileNodeServiceImpl implements FileNodeService {
     }
 
     /**
-     * 同级重名自动改名：base 已被占用则追加 (2)(3)... 后缀。
+     * 同级重名自动改名：base 已被占用则在扩展名前插入 (2)(3)... 序号
+     * （如 test.docx → test (2).docx；无扩展名/目录则尾部追加）。
      *
      * <p>TODO（并发兜底）：需 B 组在 files 表加部分唯一索引，防并发重名——
      * {@code CREATE UNIQUE INDEX ... ON files(owner_id, parent_id, name) WHERE deleted_at IS NULL}
@@ -245,10 +246,13 @@ public class FileNodeServiceImpl implements FileNodeService {
         if (!siblings.contains(base)) {
             return base;
         }
+        int dot = base.lastIndexOf('.');
+        String stem = dot > 0 ? base.substring(0, dot) : base;
+        String ext = dot > 0 ? base.substring(dot) : "";
         int i = 2;
-        while (siblings.contains(base + " (" + i + ")")) {
+        while (siblings.contains(stem + " (" + i + ")" + ext)) {
             i++;
         }
-        return base + " (" + i + ")";
+        return stem + " (" + i + ")" + ext;
     }
 }

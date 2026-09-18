@@ -38,14 +38,14 @@ public interface FileNodeMapper extends BaseMapper<FileNode> {
     int countInSubtree(@Param("id") Long id, @Param("targetId") Long targetId);
 
     /**
-     * 同级下与 base 同名或形如 "base (n)" 的名字集合（重名自动改名用）。
+     * 同级全部未删除文件名（重名自动改名时由调用方按需 contains 判断）。
+     * base 参数保留仅为接口语义（原用于前缀过滤，现统一返回全量）。
      */
     @Select("""
             SELECT name FROM files
             WHERE owner_id = #{userId}
               AND parent_id = #{parentId}
               AND deleted_at IS NULL
-              AND (name = #{base} OR name LIKE #{base} || ' (%' ESCAPE '\')
             """)
     List<String> selectSiblingNames(@Param("userId") Long userId,
                                     @Param("parentId") Long parentId,

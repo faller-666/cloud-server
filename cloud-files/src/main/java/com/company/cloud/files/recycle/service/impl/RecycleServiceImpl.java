@@ -143,18 +143,21 @@ public class RecycleServiceImpl implements RecycleService {
     }
 
     /**
-     * 同级重名自动改名：base 已被占用则追加 (2)(3)... 后缀。
-     * （与 FileNodeServiceImpl.resolveUniqueName 同款逻辑，其为 private 故在此复制一份）
+     * 同级重名自动改名：base 已被占用则在扩展名前插入 (2)(3)... 序号
+     * （与 FileNodeServiceImpl.resolveUniqueName 同款逻辑，其为 private 故在此复制一份）。
      */
     private String resolveUniqueName(Long userId, long parentId, String base) {
         List<String> siblings = mapper.selectSiblingNames(userId, parentId, base);
         if (!siblings.contains(base)) {
             return base;
         }
+        int dot = base.lastIndexOf('.');
+        String stem = dot > 0 ? base.substring(0, dot) : base;
+        String ext = dot > 0 ? base.substring(dot) : "";
         int i = 2;
-        while (siblings.contains(base + " (" + i + ")")) {
+        while (siblings.contains(stem + " (" + i + ")" + ext)) {
             i++;
         }
-        return base + " (" + i + ")";
+        return stem + " (" + i + ")" + ext;
     }
 }
