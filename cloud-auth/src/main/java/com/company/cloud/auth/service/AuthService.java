@@ -155,8 +155,9 @@ public class AuthService {
         user.setMustChangePassword(false);
         userRepository.save(user);
         auditService.changePassword(user.getId(), user.getUsername());
-        // 吊销当前 access（改密后旧 token 失效）
-        revocationService.revokeAccess("all-for-user-" + user.getId()); // 骨架示意，正常按 jti 索引吊销
+        // 用户自助改密 → 用户 token 版本 +1，该账号此前签发的全部 token 立即失效（R-A03）
+        long ver = revocationService.bumpUserTokenVersion(user.getId());
+        log.info("改密成功 userId={}，已吊销全部历史 token (uv={})", user.getId(), ver);
     }
 
     /**
