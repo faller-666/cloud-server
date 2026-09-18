@@ -21,6 +21,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
 
     /**
+     * 统计仍处于 active 状态的管理员数量。
+     * 用于「至少保留一个 admin」自我保护（对标 A3）：禁/降级最后一个可用管理员时应被拒绝。
+     */
+    long countByRoleAndStatus(String role, String status);
+
+    /**
      * 管理端用户列表：按用户名模糊搜索 + 按状态筛选 + 分页
      *
      * <p>修复（C组审出）：Hibernate 6 对 null 的 String 参数按 bytea 绑定，

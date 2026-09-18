@@ -6,12 +6,14 @@ import com.company.cloud.auth.dto.UpdateUserRequest;
 import com.company.cloud.auth.entity.User;
 import com.company.cloud.auth.service.AdminUserService;
 import com.company.cloud.auth.security.RequireRole;
+import com.company.cloud.auth.security.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -49,8 +51,13 @@ public class AdminUserController {
 
     @PatchMapping("/{id}")
     public Result<Void> update(@PathVariable Long id,
-                                    @Valid @RequestBody UpdateUserRequest req) {
-        adminUserService.update(id, req);
+                               @Valid @RequestBody UpdateUserRequest req,
+                               Authentication authentication) {
+        Long operatorId = null;
+        if (authentication != null && authentication.getPrincipal() instanceof CurrentUser cu) {
+            operatorId = cu.getId();
+        }
+        adminUserService.update(id, req, operatorId);
         return Result.ok();
     }
 

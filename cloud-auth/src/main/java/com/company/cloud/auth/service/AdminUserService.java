@@ -84,16 +84,43 @@ public class AdminUserService {
     }
 
     /**
-     * 更新用户：禁用/启用、调整配额、变更角色
+     * 更新用户：禁用/启用、调整配额、变更角色。
+     *
+     * <p>A3 自我保护：禁止 admin 禁用/降级自己，且禁用/降级任一 admin 时须保证系统
+     * 至少保留一个 active 状态的 admin，避免产生管理死锁（无人可再管理账号）。
+     *
+     * @param operatorId 当前操作者 id（来自认证上下文）
      */
     @Transactional
-    public void update(Long id, UpdateUserRequest req) {
+    public void update(Long id, UpdateUserRequest req, Long operatorId) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new BizException(ErrorCode.USER_NOT_FOUND));
 
+        // A3-1：禁止操作者禁用/降级自己
+        boolean selfOp = operatorId != null && operatorId.equals(user.getId());
+        boolean disableTarget = req.getStatus() != null && "disabled".equals(req.getStatus());
+        boolean demoteTarget = req.getRole() != null && !"admin".equals(req.getRole());
+        if (selfOp && (disableTarget || demoteTarget)) {
+            throw new BizException(ErrorCode.FORBIDDEN, "不能禁用自己的账号或降低自己的管理员权限");
+        }
+
+        // A3-2：若目标是管理员，且本次操作会使其失去 admin 能力（禁用或降级为非 admin），
+        // 则必须保证系统中仍存在其他 active 管理员，否则拒绝，避免管理死锁。
+        boolean isAdminTarget = "admin".equals(user.getRole());
+        boolean losesAdmin = (isAdminTarget && disableTarget)
+                || (isAdminTarget && demoteTarget);
+        if (losesAdmin) {
+            long activeAdminCount = userRepository.countByRoleAndStatus("admin", "active");
+            // 目标当前仍为 active 管理员时，从其计数中扣除，计算「其余活跃管理员数」
+            long remainingActiveAdmin = activeAdminCount - (user.isDisabled() ? 0 : 1);
+            if (remainingActiveAdmin <= 0) {
+                throw new BizException(ErrorCode.FORBIDDEN, "系统至少需要保留一个启用的管理员，不能禁用/降级最后一个管理员");
+            }
+        }
+
         if (req.getStatus() != null && !req.getStatus().isBlank()) {
-            if ("disabled".equals(req.getStatus()) && !user.isDisabled()) {
-                auditService.disableUser(0L, id);
+            if (disableTarget && !user.isDisabled()) {
+                auditService.disableUser(operatorId == null ? 0L : operatorId, id);
                 // 禁用账号 → 用户 token 版本 +1，该账号所有已签发 token 立即过期（R-A03 禁用拦截）
                 long ver = revocationService.bumpUserTokenVersion(id);
                 log.info("[admin] 禁用账号 userId={} 已吊销全部 token (uv={})", id, ver);
@@ -112,7 +139,7 @@ public class AdminUserService {
             }
             long oldQuota = user.getQuotaBytes();
             user.setQuotaBytes(req.getQuotaBytes());
-            auditService.quotaChange(0L, id, oldQuota, req.getQuotaBytes());
+            auditService.quotaChange(operatorId == null ? 0L : operatorId, id, oldQuota, req.getQuotaBytes());
         }
         if (req.getNickname() != null) {
             user.setNickname(req.getNickname());
