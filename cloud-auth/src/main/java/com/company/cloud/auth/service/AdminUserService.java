@@ -7,6 +7,7 @@ import com.company.cloud.auth.dto.CreateUserRequest;
 import com.company.cloud.auth.dto.UpdateUserRequest;
 import com.company.cloud.auth.entity.User;
 import com.company.cloud.auth.repository.UserRepository;
+import com.company.cloud.auth.security.RevocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,7 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final RevocationService revocationService;
 
     @Value("${app.role.default-quota-bytes}")
     private long defaultQuotaBytes;
@@ -92,6 +94,9 @@ public class AdminUserService {
         if (req.getStatus() != null && !req.getStatus().isBlank()) {
             if ("disabled".equals(req.getStatus()) && !user.isDisabled()) {
                 auditService.disableUser(0L, id);
+                // 禁用账号 → 用户 token 版本 +1，该账号所有已签发 token 立即过期（R-A03 禁用拦截）
+                long ver = revocationService.bumpUserTokenVersion(id);
+                log.info("[admin] 禁用账号 userId={} 已吊销全部 token (uv={})", id, ver);
             }
             user.setStatus(req.getStatus());
         }
@@ -145,7 +150,9 @@ public class AdminUserService {
         user.setPasswordHash(passwordEncoder.encode(raw));
         user.setMustChangePassword(true);
         userRepository.save(user);
-        log.info("[admin] 重置密码 userId={}", id);
+        // 重置密码 → 用户 token 版本 +1，该账号所有已签发 token（access/refresh）立即过期
+        long ver = revocationService.bumpUserTokenVersion(id);
+        log.info("[admin] 重置密码 userId={} 已吊销全部 token (uv={})", id, ver);
         return raw;
     }
 

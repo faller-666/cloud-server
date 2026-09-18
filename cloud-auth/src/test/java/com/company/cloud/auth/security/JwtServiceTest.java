@@ -15,11 +15,19 @@ class JwtServiceTest {
 
     @BeforeEach
     void setUp() {
+        // RevocationService 在测试中用一个返回版本 0 的假实现
+        RevocationService revocationService = new RevocationService(null) {
+            @Override
+            public long getUserTokenVersion(Long userId) {
+                return 0L;
+            }
+        };
         jwtService = new JwtService(
                 "cloud-storage-test-secret-key-0123456789abcdef-0123456789", // >= 32 bytes
                 "cloud-storage",
                 120,  // access 2h
-                14);  // refresh 14d
+                14,   // refresh 14d
+                revocationService);
     }
 
     @Test

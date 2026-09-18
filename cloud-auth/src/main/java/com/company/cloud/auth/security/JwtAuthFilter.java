@@ -50,14 +50,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     String jti = jwtService.getJti(claims);
                     if (!revocationService.isRevoked(jti)) {
                         Long userId = Long.valueOf(claims.getSubject());
-                        String username = claims.get("username", String.class);
-                        String role = claims.get("role", String.class);
-                        CurrentUser cu = new CurrentUser(userId, username, role);
-                        UsernamePasswordAuthenticationToken auth =
-                                new UsernamePasswordAuthenticationToken(
-                                        cu, null,
-                                        List.of(new SimpleGrantedAuthority("ROLE_" + role)));
-                        SecurityContextHolder.getContext().setAuthentication(auth);
+                        // 用户级 token 版本校验：账号被禁用/重置密码后版本 +1，
+                        // 该账号此前签发的所有 access token 立即失效（R-A03 禁用拦截）
+                        long tokenUv = claims.get("uv", Long.class) == null
+                                ? 0L : claims.get("uv", Long.class);
+                        if (revocationService.getUserTokenVersion(userId) == tokenUv) {
+                            String username = claims.get("username", String.class);
+                            String role = claims.get("role", String.class);
+                            CurrentUser cu = new CurrentUser(userId, username, role);
+                            UsernamePasswordAuthenticationToken auth =
+                                    new UsernamePasswordAuthenticationToken(
+                                            cu, null,
+                                            List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                            SecurityContextHolder.getContext().setAuthentication(auth);
+                        }
+                        // uv 不一致 → 说明账号已被禁用/版本已升级 → 不认证，进入后续 Security 触发 401
                     }
                     // 已吊销 → 不认证，进入后续 Security 触发 401
                 }

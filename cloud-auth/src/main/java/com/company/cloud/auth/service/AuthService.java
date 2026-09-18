@@ -111,6 +111,11 @@ public class AuthService {
         if (user.isDisabled()) {
             throw new BizException(ErrorCode.ACCOUNT_DISABLED);
         }
+        // 用户级 token 版本校验：账号被禁用/重置密码后版本 +1，旧 refresh token 不可再用（R-A03）
+        long tokenUv = claims.get("uv", Long.class) == null ? 0L : claims.get("uv", Long.class);
+        if (revocationService.getUserTokenVersion(userId) != tokenUv) {
+            throw new BizException(ErrorCode.TOKEN_INVALID);
+        }
         // 轮换：吊销旧 refresh，签发新双 token
         revocationService.revokeWithRemaining(jwtService.getJti(claims), refreshRemainingMillis(claims));
         String access = jwtService.createAccessToken(user.getId(), user.getUsername(), user.getRole());
