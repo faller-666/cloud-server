@@ -85,7 +85,7 @@ class RecycleServiceImplTest {
         when(mapper.selectById(50L)).thenReturn(dirNode(50L, false)); // 原父健在且是目录
         when(mapper.selectSiblingNames(eq(UID), eq(50L), eq("a.txt"))).thenReturn(List.of("b.txt"));
 
-        service.restore(UID, 5L);
+        service.restore(UID, 5L, null);
 
         ArgumentCaptor<FileNode> saved = ArgumentCaptor.forClass(FileNode.class);
         verify(mapper).restoreCascade(UID, 5L);          // 整棵子树先清 deleted_at
@@ -103,7 +103,7 @@ class RecycleServiceImplTest {
         when(mapper.selectById(50L)).thenReturn(dirNode(50L, true));  // 原父也在回收站 → 不可回
         when(mapper.selectSiblingNames(eq(UID), eq(0L), eq("a.txt"))).thenReturn(List.of());
 
-        service.restore(UID, 5L);
+        service.restore(UID, 5L, null);
 
         ArgumentCaptor<FileNode> saved = ArgumentCaptor.forClass(FileNode.class);
         verify(mapper).updateById(saved.capture());
@@ -119,7 +119,7 @@ class RecycleServiceImplTest {
         when(mapper.selectSiblingNames(eq(UID), eq(0L), eq("a.txt")))
                 .thenReturn(List.of("a.txt", "a.txt (2)"));
 
-        service.restore(UID, 5L);
+        service.restore(UID, 5L, null);
 
         ArgumentCaptor<FileNode> saved = ArgumentCaptor.forClass(FileNode.class);
         verify(mapper).updateById(saved.capture());
@@ -133,7 +133,7 @@ class RecycleServiceImplTest {
         when(mapper.selectById(5L)).thenReturn(alive);
 
         // 40314 RECYCLE_NOT_FOUND
-        assertThatThrownBy(() -> service.restore(UID, 5L)).isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.restore(UID, 5L, null)).isInstanceOf(BizException.class);
         verify(mapper, never()).updateById(any(FileNode.class));
         verify(auditService, never()).record(any());
     }
