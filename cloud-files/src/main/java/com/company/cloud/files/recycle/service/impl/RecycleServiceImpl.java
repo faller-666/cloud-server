@@ -1,5 +1,6 @@
 package com.company.cloud.files.recycle.service.impl;
 
+import org.springframework.beans.factory.annotation.Value;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.cloud.common.audit.AuditActions;
 import com.company.cloud.common.audit.AuditEvent;
@@ -29,12 +30,17 @@ public class RecycleServiceImpl implements RecycleService {
     private final RefCountClient refCountClient;
     private final AuditService auditService;
 
+    /** 回收站保留期（天），与 R-C06 定时清理同一配置口径（recycle.retention-days）。 */
+    @Value("${recycle.retention-days:30}")
+    private int retentionDays;
+
     // ---------- R-C05 回收站列表 ----------
 
     @Override
     public PageResult<RecycleItemVO> list(Long userId, int page, int size) {
         Page<FileNode> result = mapper.selectRecycleTopPage(Page.of(page, size), userId);
-        List<RecycleItemVO> list = result.getRecords().stream().map(RecycleItemVO::from).toList();
+        List<RecycleItemVO> list = result.getRecords().stream()
+                .map(n -> RecycleItemVO.from(n, retentionDays)).toList();
         return PageResult.of(result.getTotal(), list);
     }
 

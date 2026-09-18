@@ -124,4 +124,18 @@
           AND deleted_at IS NULL
     </update>
 
+    <!-- R-C06：回收站超期待清理顶层节点（跨全部用户，系统任务）。
+         顶层语义与 selectRecycleTopPage 一致：父在回收站中的节点不单独出现，
+         随顶层祖先整棵过期；级联软删同事务打标，整树 deleted_at 相同。 -->
+    <select id="selectPurgeCandidates" resultType="com.company.cloud.files.dir.entity.FileNode">
+        SELECT * FROM files
+        WHERE deleted_at IS NOT NULL
+          AND deleted_at &lt; #{cutoff}
+          AND (parent_id = 0
+               OR parent_id NOT IN (SELECT id FROM files WHERE deleted_at IS NOT NULL))
+        ORDER BY deleted_at ASC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
+

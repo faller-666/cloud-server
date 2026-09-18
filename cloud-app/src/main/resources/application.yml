@@ -109,3 +109,13 @@ upload:
 
 download:
   presign-expiry-seconds: 300 # 下载预签名 5 分钟
+
+# C 组 文件管理域配置
+recycle:
+  # 回收站保留期（天）：超期内容每日凌晨自动物理清理（R-C06）。
+  # 注意：回收站列表展示的 expireAt 口径须与此值同步（RecycleItemVO）。
+  retention-days: ${RECYCLE_RETENTION_DAYS:30}
+  purge:
+    cron: "${RECYCLE_PURGE_CRON:0 0 3 * * ?}"   # 每天凌晨 3 点（6 段 Quartz 格式）
+    dry-run: ${RECYCLE_PURGE_DRY_RUN:true}      # true=只打印待清理清单不执行；验收核对通过后改 false
+    batch-size: ${RECYCLE_PURGE_BATCH_SIZE:200} # 单轮最大处理条数，控制单批事务规模
