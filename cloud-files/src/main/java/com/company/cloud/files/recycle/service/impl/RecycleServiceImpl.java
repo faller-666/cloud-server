@@ -38,7 +38,12 @@ public class RecycleServiceImpl implements RecycleService {
 
     @Override
     public PageResult<RecycleItemVO> list(Long userId, int page, int size) {
-        Page<FileNode> result = mapper.selectRecycleTopPage(Page.of(page, size), userId);
+        if (size <= 0) {
+            List<RecycleItemVO> all = mapper.selectRecycleAll(userId).stream()
+                    .map(n -> RecycleItemVO.from(n, retentionDays)).toList();
+            return PageResult.of(all.size(), all);
+        }
+        Page<FileNode> result = mapper.selectRecyclePage(Page.of(page, size), userId);
         List<RecycleItemVO> list = result.getRecords().stream()
                 .map(n -> RecycleItemVO.from(n, retentionDays)).toList();
         return PageResult.of(result.getTotal(), list);
@@ -48,15 +53,17 @@ public class RecycleServiceImpl implements RecycleService {
 
     @Override
     @Transactional
-    public FileNodeVO restore(Long userId, Long id) {
+    public FileNodeVO restore(Long userId, Long id, Long targetParentId) {
         FileNode node = requireRecycleNode(userId, id);
 
-        // 还原落点：原父目录仍存在、未删、属于本人且是目录 → 回原位；否则落根目录
-        long targetParent = resolveRestoreParent(userId, node.getParentId());
+        // 还原落点：未指定 targetParentId → 回原位（父不可用则落根）；指定 → 恢复到该目标目录
+        long targetParent = targetParentId == null
+                ? resolveRestoreParent(userId, node.getParentId())
+                : resolveTargetParent(userId, targetParentId);
         // 目标位置重名自动改名（与 FileNodeServiceImpl 同款私有实现）
         String targetName = resolveUniqueName(userId, targetParent, node.getName());
 
-        // 两步处理：先级联清整棵子树的 deleted_at（不碰 parent_id/name），
+        // 两步处理：先级联清整棵子树的 deleted_at（不碰 parent_id/name，子孙 parentId 保留原层级），
         // 再单独改顶层节点的 parent_id / name
         mapper.restoreCascade(userId, id);
         node.setParentId(targetParent);
@@ -117,6 +124,22 @@ public class RecycleServiceImpl implements RecycleService {
                 && parent.getDeletedAt() == null
                 && Boolean.TRUE.equals(parent.getIsDir());
         return usable ? parentId : 0;
+    }
+
+    /** 指定目标目录可回（0=根；或存在、未删、本人、是目录），否则 40304 */
+    private long resolveTargetParent(Long userId, long targetParentId) {
+        if (targetParentId == 0) {
+            return 0;
+        }
+        FileNode target = mapper.selectById(targetParentId);
+        boolean usable = target != null
+                && userId.equals(target.getOwnerId())
+                && target.getDeletedAt() == null
+                && Boolean.TRUE.equals(target.getIsDir());
+        if (!usable) {
+            throw new BizException(ErrorCode.FILE_NOT_FOUND);
+        }
+        return targetParentId;
     }
 
     /**

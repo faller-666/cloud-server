@@ -7,6 +7,7 @@ import com.company.cloud.common.result.PageResult;
 import com.company.cloud.common.result.Result;
 import com.company.cloud.files.dir.dto.FileNodeVO;
 import com.company.cloud.files.recycle.dto.RecycleItemVO;
+import com.company.cloud.files.recycle.dto.RestoreRequest;
 import com.company.cloud.files.recycle.service.RecycleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,12 +43,14 @@ public class RecycleController {
         return Result.ok(recycleService.list(currentUserId(authentication), page, size));
     }
 
-    @Operation(summary = "还原（R-C06）：原父目录可用则回原位，否则回根目录；重名自动改名")
+    @Operation(summary = "还原（R-C06）：未指定 targetParentId 回原位，指定则恢复到目标目录；重名自动改名")
     @PostMapping("/{id}/restore")
     public Result<FileNodeVO> restore(
             Authentication authentication,
-            @PathVariable Long id) {
-        return Result.ok(recycleService.restore(currentUserId(authentication), id));
+            @PathVariable Long id,
+            @RequestBody(required = false) RestoreRequest request) {
+        Long targetParentId = request == null ? null : request.targetParentId();
+        return Result.ok(recycleService.restore(currentUserId(authentication), id, targetParentId));
     }
 
     /** 当前用户 id：从 SecurityContext 取（A 组 JwtAuthFilter 注入 CurrentUser），与 B 组 UploadController 一致。 */
