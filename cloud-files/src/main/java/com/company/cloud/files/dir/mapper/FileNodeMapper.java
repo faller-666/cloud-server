@@ -54,10 +54,15 @@ public interface FileNodeMapper extends BaseMapper<FileNode> {
     // ---------- 回收站（R-C05/C06，SQL 见 FileNodeMapper.xml） ----------
 
     /**
-     * 回收站顶层节点分页：本人已删除、且父节点不在回收站中（或父为根）的节点，
+     * 回收站分页：本人全部已删除节点（含子孙，parentId 保留删除前原值，供前端重建目录树），
      * 按 deleted_at DESC。MP Page 首参自动分页。
      */
-    Page<FileNode> selectRecycleTopPage(Page<FileNode> page, @Param("userId") Long userId);
+    Page<FileNode> selectRecyclePage(Page<FileNode> page, @Param("userId") Long userId);
+
+    /**
+     * 回收站全量：本人全部已删除节点（不分页，含子孙），供前端一次拉取重建目录树。
+     */
+    List<FileNode> selectRecycleAll(@Param("userId") Long userId);
 
     /**
      * 级联还原：自身 + 全部已删子孙清 deleted_at（不碰 parent_id / name，
@@ -144,4 +149,15 @@ public interface FileNodeMapper extends BaseMapper<FileNode> {
             @Arg(column = "bytes", javaType = long.class)
     })
     List<StatsOverview.TypeCount> selectTypeBreakdown(@Param("userId") Long userId);
+
+    // ---------- 回收站超期清理（R-C06，SQL 见 FileNodeMapper.xml） ----------
+
+    /**
+     * 回收站超期待清理<b>顶层节点</b>（跨全部用户，系统任务）：
+     * 已删除且 deleted_at 早于 cutoff（now - retentionDays），且父节点不在回收站中
+     * （或父为根）——与回收站列表 selectRecycleTopPage 同款顶层语义，
+     * 子树随顶层祖先整棵过期。按 deleted_at 升序（最老的先清），LIMIT 限流。
+     */
+    List<FileNode> selectPurgeCandidates(@Param("cutoff") java.time.OffsetDateTime cutoff,
+                                         @Param("limit") int limit);
 }

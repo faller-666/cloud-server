@@ -1,0 +1,17 @@
+package com.company.cloud.files.stats.dto;
+
+/**
+ * 用量 Top 用户项（R-C09，契约 GET /api/admin/stats/top-users）。
+ *
+ * @param userId     用户 ID
+ * @param username   用户名
+ * @param usedBytes  已用字节（含回收站占用，与配额同口径）
+ * @param quotaBytes 配额字节
+ */
+public record TopUser(
+        long userId,
+        String username,
+        long usedBytes,
+        long quotaBytes
+) {
+}

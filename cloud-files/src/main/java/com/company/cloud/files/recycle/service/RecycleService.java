@@ -9,14 +9,17 @@ import com.company.cloud.files.recycle.dto.RecycleItemVO;
  */
 public interface RecycleService {
 
-    /** R-C05：回收站列表（仅顶层被删节点，按删除时间倒序分页；含 deletedAt/expireAt） */
+    /**
+     * R-C05：回收站列表。返回本人全部被删节点（含子孙，parentId 保留删除前原值，供前端重建目录树）；
+     * size<=0 时返回全量（不分页），否则按删除时间倒序分页。
+     */
     PageResult<RecycleItemVO> list(Long userId, int page, int size);
 
     /**
-     * R-C06：还原。原父目录仍可用则回原位，否则落到根目录；
-     * 目标位置重名自动追加 (2)(3) 后缀；子树级联还原。
+     * R-C06：还原。targetParentId 为 null 时回原位置（父目录不可用则落根目录）；
+     * 传 0 或指定目录时恢复到该目标目录；目标位置重名自动追加 (2)(3) 后缀；子树级联还原。
      */
-    FileNodeVO restore(Long userId, Long id);
+    FileNodeVO restore(Long userId, Long id, Long targetParentId);
 
     /**
      * R-C06：彻底删除。子树级联物理删除，释放配额，
