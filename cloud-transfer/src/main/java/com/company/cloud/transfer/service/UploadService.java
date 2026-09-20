@@ -1,5 +1,8 @@
 package com.company.cloud.transfer.service;
 
+import com.company.cloud.common.audit.AuditActions;
+import com.company.cloud.common.audit.AuditEvent;
+import com.company.cloud.common.audit.AuditService;
 import com.company.cloud.common.result.BizException;
 import com.company.cloud.common.result.ErrorCode;
 import com.company.cloud.transfer.entity.FileEntity;
@@ -18,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,6 +50,7 @@ public class UploadService {
     private final FileEntityRepository fileRepo;
     private final UploadSessionEntityRepository sessionRepo;
     private final UserQuotaRepository quotaRepo;
+    private final AuditService auditService;
 
     private final long maxFileSize;               // 默认 10GB
     private final Set<String> allowedExtensions;  // 扩展名白名单
@@ -56,6 +61,7 @@ public class UploadService {
                          FileEntityRepository fileRepo,
                          UploadSessionEntityRepository sessionRepo,
                          UserQuotaRepository quotaRepo,
+                         AuditService auditService,
                          @Value("${upload.max-file-size:10737418240}") long maxFileSize,
                          @Value("${upload.allowed-extensions:}") String allowedExt,
                          @Value("${download.presign-expiry-seconds:300}") int presignExpirySeconds,
@@ -64,6 +70,7 @@ public class UploadService {
         this.fileRepo = fileRepo;
         this.sessionRepo = sessionRepo;
         this.quotaRepo = quotaRepo;
+        this.auditService = auditService;
         this.maxFileSize = maxFileSize;
         this.allowedExtensions = parseExtensions(allowedExt);
         this.presignExpirySeconds = presignExpirySeconds;
@@ -91,6 +98,9 @@ public class UploadService {
                     .name(resolveUniqueName(userId, targetParent, name))
                     .isDir(false).size(size).sha256(sha256).refCount(1)
                     .build());
+            auditService.record(new AuditEvent(
+                    userId, AuditActions.UPLOAD, String.valueOf(f.getId()), null,
+                    Map.of("name", f.getName(), "size", size)));
             return InitResult.done(f.getId());
         }
 
@@ -221,6 +231,9 @@ public class UploadService {
         s.setFileId(saved.getId());
         s.setStatus(STATUS_DONE);
         sessionRepo.save(s);
+        auditService.record(new AuditEvent(
+                userId, AuditActions.UPLOAD, String.valueOf(saved.getId()), null,
+                Map.of("name", saved.getName(), "size", s.getSizeBytes())));
         return new CompleteResult(saved.getId(), false);
     }
 
@@ -245,7 +258,11 @@ public class UploadService {
         try {
             // 5 分钟预签名 URL；字节流走 Nginx → MinIO，不过应用进程
             // inline=true 供预览（不强制 attachment），否则供下载（带文件名 attachment）
-            return minio.presignGet(objectKeyOf(f.getSha256()), f.getName(), presignExpirySeconds, inline);
+            String url = minio.presignGet(objectKeyOf(f.getSha256()), f.getName(), presignExpirySeconds, inline);
+            auditService.record(new AuditEvent(
+                    userId, AuditActions.DOWNLOAD, String.valueOf(f.getId()), null,
+                    Map.of("name", f.getName(), "size", f.getSize(), "inline", inline)));
+            return url;
         } catch (Exception e) {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "生成下载地址失败");
         }
