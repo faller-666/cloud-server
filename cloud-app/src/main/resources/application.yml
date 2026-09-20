@@ -100,6 +100,7 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin}
   bucket: ${MINIO_BUCKET:cloud-files}
+  region: ${MINIO_REGION:us-east-1}
 
 upload:
   part-size: 8388608          # 8MB 单片

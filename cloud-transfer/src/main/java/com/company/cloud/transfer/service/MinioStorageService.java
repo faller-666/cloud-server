@@ -33,15 +33,18 @@ public class MinioStorageService {
     private final MinioAsyncClient presignClient;
     private final String bucket;
     private final int partSize;
+    private final String region;
 
     public MinioStorageService(MinioAsyncClient minio,
                                @Qualifier("presignClient") MinioAsyncClient presignClient,
                                @Value("${minio.bucket}") String bucket,
-                               @Value("${upload.part-size:8388608}") int partSize) {
+                               @Value("${upload.part-size:8388608}") int partSize,
+                               @Value("${minio.region:us-east-1}") String region) {
         this.minio = minio;
         this.presignClient = presignClient;
         this.bucket = bucket;
         this.partSize = partSize;
+        this.region = region;
     }
 
     public int partSize() {
@@ -154,6 +157,7 @@ public class MinioStorageService {
         return presignClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .method(Http.Method.GET)
                 .bucket(bucket).object(objectKey)
+                .region(region)
                 .expiry(expirySeconds)
                 .extraQueryParams(Map.of(
                         "response-content-type", contentType,
