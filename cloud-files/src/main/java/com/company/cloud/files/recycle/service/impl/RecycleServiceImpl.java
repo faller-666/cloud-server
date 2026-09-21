@@ -69,6 +69,7 @@ public class RecycleServiceImpl implements RecycleService {
         // 若先清 deleted_at 再用原名，中间态会与未删同名节点撞唯一约束（DuplicateKeyException）。
         node.setParentId(targetParent);
         node.setName(targetName);
+        node.setDeletedAt(null); // 仅置空内存态（保证返回 VO 的 deletedAt 正确）；updateById 的 NOT_NULL 策略不写 deleted_at 列，真正清标记靠下面 restoreCascade
         mapper.updateById(node);
         // 再级联清整棵子树（含顶层自身）的 deleted_at；顶层已是改好名/落点状态，不会撞未删同名。
         mapper.restoreCascade(userId, id);
