@@ -10,6 +10,7 @@ import com.company.cloud.transfer.entity.UploadSessionEntity;
 import com.company.cloud.transfer.repository.FileEntityRepository;
 import com.company.cloud.transfer.repository.UploadSessionEntityRepository;
 import com.company.cloud.transfer.repository.UserQuotaRepository;
+import io.minio.errors.ErrorResponseException;
 import io.minio.messages.Part;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -207,6 +208,18 @@ public class UploadService {
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {
+            // NoSuchUpload：MinIO 端 uploadId 已失效（重启/清理），或并发 complete 已消费该 uploadId
+            if (isNoSuchUpload(e)) {
+                // 并发完成兜底：另一个 complete 已成功落库 → 幂等返回，别误报失败
+                Optional<UploadSessionEntity> latest = sessionRepo.findById(sessionId);
+                if (latest.isPresent() && STATUS_DONE.equals(latest.get().getStatus())) {
+                    return new CompleteResult(latest.get().getFileId(), true);
+                }
+                // uploadId 真失效：置 aborted，给前端可引导「重新上传」的明确错误，替代笼统 50000
+                s.setStatus(STATUS_ABORTED);
+                sessionRepo.save(s);
+                throw new BizException(ErrorCode.UPLOAD_SESSION_EXPIRED);
+            }
             throw new BizException(ErrorCode.SYSTEM_ERROR,
                     "合并分片失败: " + e.getClass().getSimpleName() + " - " + e.getMessage() + " | MinIO分片=" + partsDebug);
         }
@@ -325,6 +338,16 @@ public class UploadService {
     /** 对象 key：内容寻址 objects/<sha256>（同内容同 key，天然去重）。 */
     private String objectKeyOf(String sha256) {
         return "objects/" + sha256;
+    }
+
+    /** 沿异常链判断是否为 MinIO NoSuchUpload（multipart uploadId 失效/被消费）。 */
+    private boolean isNoSuchUpload(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof ErrorResponseException ere && "NoSuchUpload".equals(ere.errorResponse().code())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private long chunkCount(long size, int chunkSize) {
