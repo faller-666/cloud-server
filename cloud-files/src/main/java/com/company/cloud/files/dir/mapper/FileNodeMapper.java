@@ -57,12 +57,12 @@ public interface FileNodeMapper extends BaseMapper<FileNode> {
      * 回收站分页：本人全部已删除节点（含子孙，parentId 保留删除前原值，供前端重建目录树），
      * 按 deleted_at DESC。MP Page 首参自动分页。
      */
-    Page<FileNode> selectRecyclePage(Page<FileNode> page, @Param("userId") Long userId);
+    Page<FileNode> selectRecyclePage(Page<FileNode> page, @Param("userId") Long userId, @Param("parentId") Long parentId);
 
     /**
      * 回收站全量：本人全部已删除节点（不分页，含子孙），供前端一次拉取重建目录树。
      */
-    List<FileNode> selectRecycleAll(@Param("userId") Long userId);
+    List<FileNode> selectRecycleAll(@Param("userId") Long userId, @Param("parentId") Long parentId);
 
     /**
      * 级联还原：自身 + 全部已删子孙清 deleted_at（不碰 parent_id / name，

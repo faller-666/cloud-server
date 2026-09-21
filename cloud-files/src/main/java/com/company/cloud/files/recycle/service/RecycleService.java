@@ -10,10 +10,10 @@ import com.company.cloud.files.recycle.dto.RecycleItemVO;
 public interface RecycleService {
 
     /**
-     * R-C05：回收站列表。返回本人全部被删节点（含子孙，parentId 保留删除前原值，供前端重建目录树）；
+     * R-C05：回收站列表。parent 空/0 返回回收站顶层节点（父不在回收站中），parent&gt;0 返回 parent_id 子项；
      * size<=0 时返回全量（不分页），否则按删除时间倒序分页。
      */
-    PageResult<RecycleItemVO> list(Long userId, int page, int size);
+    PageResult<RecycleItemVO> list(Long userId, int page, int size, Long parent);
 
     /**
      * R-C06：还原。targetParentId 为 null 时回原位置（父目录不可用则落根目录）；

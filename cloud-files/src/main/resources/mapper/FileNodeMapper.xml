@@ -47,20 +47,37 @@
         SELECT COUNT(*) FROM sub WHERE id = #{targetId}
     </select>
 
-    <!-- 回收站列表（R-C05）：本人全部已删除节点（含子孙），parentId 保留删除前原值，
-         前端据此重建完整目录树；按删除时间倒序 -->
+    <!-- 回收站列表（R-C05）：parentId 空/0 返回顶层节点（父不在回收站中），parentId&gt;0 返回子项 -->
     <select id="selectRecyclePage" resultType="com.company.cloud.files.dir.entity.FileNode">
         SELECT * FROM files
         WHERE deleted_at IS NOT NULL
           AND owner_id = #{userId}
+        <choose>
+            <when test="parentId == null or parentId == 0">
+              AND (parent_id = 0
+                   OR parent_id NOT IN (SELECT id FROM files WHERE deleted_at IS NOT NULL AND owner_id = #{userId}))
+            </when>
+            <otherwise>
+              AND parent_id = #{parentId}
+            </otherwise>
+        </choose>
         ORDER BY deleted_at DESC
     </select>
 
-    <!-- 回收站全量（R-C05 增量）：同上但不分页，供前端一次拉取重建目录树 -->
+    <!-- 回收站全量（R-C05 增量）：同上但不分页，parentId 语义与 selectRecyclePage 一致 -->
     <select id="selectRecycleAll" resultType="com.company.cloud.files.dir.entity.FileNode">
         SELECT * FROM files
         WHERE deleted_at IS NOT NULL
           AND owner_id = #{userId}
+        <choose>
+            <when test="parentId == null or parentId == 0">
+              AND (parent_id = 0
+                   OR parent_id NOT IN (SELECT id FROM files WHERE deleted_at IS NOT NULL AND owner_id = #{userId}))
+            </when>
+            <otherwise>
+              AND parent_id = #{parentId}
+            </otherwise>
+        </choose>
         ORDER BY deleted_at DESC
     </select>
 
@@ -144,4 +161,3 @@
     </select>
 
 </mapper>
-

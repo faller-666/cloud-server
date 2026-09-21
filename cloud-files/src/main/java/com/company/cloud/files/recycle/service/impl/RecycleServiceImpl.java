@@ -37,13 +37,14 @@ public class RecycleServiceImpl implements RecycleService {
     // ---------- R-C05 回收站列表 ----------
 
     @Override
-    public PageResult<RecycleItemVO> list(Long userId, int page, int size) {
+    public PageResult<RecycleItemVO> list(Long userId, int page, int size, Long parent) {
+        long parentId = parent == null ? 0L : parent;
         if (size <= 0) {
-            List<RecycleItemVO> all = mapper.selectRecycleAll(userId).stream()
+            List<RecycleItemVO> all = mapper.selectRecycleAll(userId, parentId).stream()
                     .map(n -> RecycleItemVO.from(n, retentionDays)).toList();
             return PageResult.of(all.size(), all);
         }
-        Page<FileNode> result = mapper.selectRecyclePage(Page.of(page, size), userId);
+        Page<FileNode> result = mapper.selectRecyclePage(Page.of(page, size), userId, parentId);
         List<RecycleItemVO> list = result.getRecords().stream()
                 .map(n -> RecycleItemVO.from(n, retentionDays)).toList();
         return PageResult.of(result.getTotal(), list);
@@ -63,13 +64,14 @@ public class RecycleServiceImpl implements RecycleService {
         // 目标位置重名自动改名（与 FileNodeServiceImpl 同款私有实现）
         String targetName = resolveUniqueName(userId, targetParent, node.getName());
 
-        // 两步处理：先级联清整棵子树的 deleted_at（不碰 parent_id/name，子孙 parentId 保留原层级），
-        // 再单独改顶层节点的 parent_id / name
-        mapper.restoreCascade(userId, id);
+        // 两步处理：先在回收站（deleted）状态下改顶层节点的 parent_id/name——
+        // deleted 节点不在 uk_files_sibling_name 唯一索引范围内，改名不冲突；
+        // 若先清 deleted_at 再用原名，中间态会与未删同名节点撞唯一约束（DuplicateKeyException）。
         node.setParentId(targetParent);
         node.setName(targetName);
-        node.setDeletedAt(null);
         mapper.updateById(node);
+        // 再级联清整棵子树（含顶层自身）的 deleted_at；顶层已是改好名/落点状态，不会撞未删同名。
+        mapper.restoreCascade(userId, id);
 
         auditService.record(new AuditEvent(
                 userId, AuditActions.RESTORE, String.valueOf(id), null,

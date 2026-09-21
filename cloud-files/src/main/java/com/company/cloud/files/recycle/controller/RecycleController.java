@@ -34,13 +34,14 @@ public class RecycleController {
 
     private final RecycleService recycleService;
 
-    @Operation(summary = "回收站列表（R-C05）：仅顶层被删节点，按删除时间倒序；含 deletedAt/expireAt")
+    @Operation(summary = "回收站列表（R-C05）：parent 空/0 返回顶层，parent>0 返回子项；按删除时间倒序；含 deletedAt/expireAt")
     @GetMapping("/trash")
     public Result<PageResult<RecycleItemVO>> list(
             Authentication authentication,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return Result.ok(recycleService.list(currentUserId(authentication), page, size));
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Long parent) {
+        return Result.ok(recycleService.list(currentUserId(authentication), page, size, parent));
     }
 
     @Operation(summary = "还原（R-C06）：未指定 targetParentId 回原位，指定则恢复到目标目录；重名自动改名")
