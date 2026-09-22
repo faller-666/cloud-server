@@ -60,6 +60,16 @@ public class UploadController {
         return Result.ok(uploadService.status(currentUserId(authentication), id));
     }
 
+    /** R-B04b：传输任务列表（分页倒序，可选 status 筛选）。 */
+    @GetMapping("/uploads")
+    public Result<UploadService.UploadTaskPage> list(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
+        return Result.ok(uploadService.listTasks(currentUserId(authentication), status, page, size));
+    }
+
     /** R-B05：合并分片并落元数据、实扣配额（可重试）。 */
     @PostMapping("/uploads/{id}/complete")
     public Result<UploadService.CompleteResult> complete(@PathVariable("id") Long id,
@@ -72,6 +82,19 @@ public class UploadController {
     public Result<Void> abort(@PathVariable("id") Long id, Authentication authentication) {
         uploadService.abort(currentUserId(authentication), id);
         return Result.ok();
+    }
+
+    /** R-B04c：删除单条任务记录（仅 done/aborted；uploading 请先 abort）。 */
+    @DeleteMapping("/uploads/{id}")
+    public Result<Void> deleteTask(@PathVariable("id") Long id, Authentication authentication) {
+        uploadService.deleteTask(currentUserId(authentication), id);
+        return Result.ok();
+    }
+
+    /** R-B04d：清空已完成任务记录，返回删除条数。 */
+    @PostMapping("/uploads/clear-completed")
+    public Result<Integer> clearCompleted(Authentication authentication) {
+        return Result.ok(uploadService.clearCompleted(currentUserId(authentication)));
     }
 
     /** R-B07：换取 5 分钟预签名下载地址（owner 校验）。 */

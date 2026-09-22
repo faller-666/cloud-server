@@ -13,6 +13,10 @@ import com.company.cloud.transfer.repository.UserQuotaRepository;
 import io.minio.errors.ErrorResponseException;
 import io.minio.messages.Part;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,6 +103,14 @@ public class UploadService {
                     .name(resolveUniqueName(userId, targetParent, name))
                     .isDir(false).size(size).sha256(sha256).refCount(1)
                     .build());
+            // 秒传也落一条传输任务记录（status 直接 done），让传输任务列表能查到
+            sessionRepo.save(UploadSessionEntity.builder()
+                    .userId(userId).uploadId("INSTANT").targetParent(targetParent)
+                    .name(f.getName()).sha256(sha256).sizeBytes(size)
+                    .chunkSize(minio.partSize()).status(STATUS_DONE)
+                    .fileId(f.getId())
+                    .expiresAt(OffsetDateTime.now().plusHours(sessionTtlHours))
+                    .build());
             auditService.record(new AuditEvent(
                     userId, AuditActions.UPLOAD, String.valueOf(f.getId()), null,
                     Map.of("name", f.getName(), "size", size)));
@@ -175,6 +187,21 @@ public class UploadService {
             throw new BizException(ErrorCode.SYSTEM_ERROR, "查询上传会话失败");
         }
         return new SessionStatus(s.getId(), s.getStatus(), s.getUploadId(), s.getChunkSize(), uploaded, detail);
+    }
+
+    // ============ R-B04b：传输任务列表（分页，倒序；可选 status 筛选） ============
+    public UploadTaskPage listTasks(Long userId, String status, int page, int size) {
+        int p = Math.max(0, page);
+        int s = Math.min(Math.max(1, size), 100); // 单页最多 100，防超大分页
+        Pageable pageable = PageRequest.of(p, s, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<UploadSessionEntity> result = hasText(status)
+                ? sessionRepo.findByUserIdAndStatus(userId, status, pageable)
+                : sessionRepo.findByUserId(userId, pageable);
+        List<UploadTaskInfo> list = result.getContent().stream()
+                .map(e -> new UploadTaskInfo(e.getId(), e.getName(), e.getSizeBytes(),
+                        e.getStatus(), e.getFileId(), e.getCreatedAt()))
+                .toList();
+        return new UploadTaskPage(list, result.getTotalElements(), p, s);
     }
 
     // ============ R-B05/R-B06：complete（可重试 + 实扣配额） ============
@@ -259,6 +286,21 @@ public class UploadService {
             s.setStatus(STATUS_ABORTED);
             sessionRepo.save(s);
         }
+    }
+
+    // ============ R-B04c/R-B04d：删除任务记录（清空已完成） ============
+    @Transactional
+    public void deleteTask(Long userId, Long sessionId) {
+        UploadSessionEntity s = ownedSession(userId, sessionId);
+        if (STATUS_UPLOADING.equals(s.getStatus())) {
+            throw new BizException(ErrorCode.UPLOAD_SESSION_IN_PROGRESS);
+        }
+        sessionRepo.delete(s);
+    }
+
+    @Transactional
+    public int clearCompleted(Long userId) {
+        return (int) sessionRepo.deleteByUserIdAndStatus(userId, STATUS_DONE);
     }
 
     // ============ R-B07：下载签发 ============
@@ -403,4 +445,11 @@ public class UploadService {
     public record PartInfo(int partNumber, long size) { }
 
     public record CompleteResult(Long fileId, boolean alreadyDone) { }
+
+    /** 传输任务列表条目。 */
+    public record UploadTaskInfo(Long id, String name, long sizeBytes, String status,
+                                 Long fileId, OffsetDateTime createdAt) { }
+
+    /** 传输任务分页结果。 */
+    public record UploadTaskPage(List<UploadTaskInfo> list, long total, int page, int size) { }
 }

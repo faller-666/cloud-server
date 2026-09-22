@@ -39,6 +39,7 @@ public enum ErrorCode {
     STORAGE_QUOTA_EXCEEDED(40208, "空间不足，请清理后重试"),
     SHA256_REQUIRED(40209, "缺少文件哈希（sha256），无法初始化上传"),
     UPLOAD_SESSION_EXPIRED(40210, "上传会话已失效，请重新上传"),
+    UPLOAD_SESSION_IN_PROGRESS(40211, "任务正在上传中，请先放弃"),
 
     // ---- 文件管理（C 组 403xx）----
     FILE_NOT_FOUND(40304, "文件或目录不存在"),
