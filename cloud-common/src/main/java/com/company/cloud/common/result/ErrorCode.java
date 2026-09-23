@@ -36,7 +36,7 @@ public enum ErrorCode {
     EXTENSION_NOT_ALLOWED(40205, "该类型文件不允许上传"),
     UPLOAD_SESSION_NOT_FOUND(40206, "上传会话不存在或已过期"),
     PARTS_INCOMPLETE(40207, "分片未传完整，请继续上传"),
-    STORAGE_QUOTA_EXCEEDED(40208, "空间不足，请清理后重试"),
+    STORAGE_QUOTA_EXCEEDED(40208, "存储额度已满，请申请增额"),
     SHA256_REQUIRED(40209, "缺少文件哈希（sha256），无法初始化上传"),
     UPLOAD_SESSION_EXPIRED(40210, "上传会话已失效，请重新上传"),
     UPLOAD_SESSION_IN_PROGRESS(40211, "任务正在上传中，请先放弃"),
