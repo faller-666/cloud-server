@@ -168,8 +168,7 @@ public class UploadService {
             // 同一 partNo 重复上传幂等覆盖（MinIO 原生行为）
             minio.uploadPart(objectKeyOf(s.getSha256()), s.getUploadId(), partNo, stream, size);
         } catch (Exception e) {
-            Throwable root = e.getCause() != null ? e.getCause() : e;
-            throw new BizException(ErrorCode.SYSTEM_ERROR, "分片上传失败: " + root.getMessage());
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "分片上传失败: " + rootMessage(e));
         }
     }
 
@@ -184,7 +183,7 @@ public class UploadService {
                 detail.add(new PartInfo(p.partNumber(), p.partSize()));
             }
         } catch (Exception e) {
-            throw new BizException(ErrorCode.SYSTEM_ERROR, "查询上传会话失败");
+            throw new BizException(ErrorCode.SYSTEM_ERROR, "查询上传会话失败: " + rootMessage(e));
         }
         return new SessionStatus(s.getId(), s.getStatus(), s.getUploadId(), s.getChunkSize(), uploaded, detail);
     }
@@ -390,6 +389,26 @@ public class UploadService {
             }
         }
         return false;
+    }
+
+    /** 沿异常链提取错误摘要：优先 MinIO 的 code + message，否则取最深层 cause 的类名 + message（避免 getMessage() 为 null）。 */
+    private String rootMessage(Throwable e) {
+        ErrorResponseException minioErr = null;
+        Throwable deepest = e;
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            deepest = t;
+            if (t instanceof ErrorResponseException ere) {
+                minioErr = ere;
+            }
+        }
+        if (minioErr != null) {
+            String code = minioErr.errorResponse().code();
+            String msg = minioErr.errorResponse().message();
+            return (code == null ? "" : code) + (msg == null || msg.isBlank() ? "" : ": " + msg);
+        }
+        String cn = deepest.getClass().getSimpleName();
+        String m = deepest.getMessage();
+        return m == null || m.isBlank() ? cn : cn + ": " + m;
     }
 
     private long chunkCount(long size, int chunkSize) {
