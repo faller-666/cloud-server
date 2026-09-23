@@ -24,6 +24,7 @@
         <module>cloud-transfer</module>
         <module>cloud-files</module>
         <module>cloud-app</module>
+    <module>cloud-billing</module>
     </modules>
 
     <properties>

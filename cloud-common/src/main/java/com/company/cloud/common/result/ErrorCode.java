@@ -47,6 +47,10 @@ public enum ErrorCode {
     RECYCLE_NOT_FOUND(40314, "回收站中不存在该文件"),
     DIR_NOT_EMPTY_RESTORE_CONFLICT(40315, "还原目标位置存在同名文件"),
 
+    // ---- 计费（D 组 billing，404xx，新增入枚举）----
+    REQUEST_ALREADY_HANDLED(40402, "该申请已被处理"),
+    GB_COUNT_INVALID(40403, "申请 GB 数非法（必须是 1~1000 的整数）"),
+
     // ---- 系统 ----
     SYSTEM_ERROR(50000, "系统繁忙，请稍后重试");
 

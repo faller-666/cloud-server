@@ -180,7 +180,9 @@ public class AuthService {
         m.put("nickname", user.getNickname());
         m.put("email", user.getEmail());
         m.put("lastLoginAt", user.getLastLoginAt());
-        return m;
+        m.put("extraBytes", user.getExtraBytes() == null ? 0L : user.getExtraBytes());
+        m.put("extraExpireAt", user.getExtraExpireAt());
+                return m;
     }
 
     private String clientIp(HttpServletRequest req) {
