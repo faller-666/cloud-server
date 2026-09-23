@@ -15,7 +15,8 @@ import java.util.List;
 /**
  * 管理端大盘统计 SQL（R-C09）。
  *
- * <p>跨模块只读：quota_bytes / used_bytes 归 A 组 users 表，audit_logs 归 C 组。
+ * <p>跨模块只读：quota_bytes / used_bytes 归 A 组 users 表，extra_bytes（计费增量额度，字节）归 D 组 billing 维护，audit_logs 归 C 组。
+ * 总额度 = quota_bytes + extra_bytes（免费 + 计费增量之和，2026-09-23 修正：此前漏算 extra_bytes）。
  * 统一用本 Mapper 直查表而非引入跨模块 Repository 依赖，与 AuditLogMapper.selectUsernames 同模式。
  */
 @Mapper
@@ -29,9 +30,9 @@ public interface AdminStatsMapper {
             @Arg(column = "user_count", javaType = long.class)
     })
     @Select("""
-            SELECT COALESCE(SUM(quota_bytes), 0) AS total_quota_bytes,
+            SELECT COALESCE(SUM(quota_bytes + extra_bytes), 0) AS total_quota_bytes,
                    COALESCE(SUM(used_bytes), 0) AS used_bytes,
-                   GREATEST(COALESCE(SUM(quota_bytes), 0)
+                   GREATEST(COALESCE(SUM(quota_bytes + extra_bytes), 0)
                           - COALESCE(SUM(used_bytes), 0), 0) AS remaining_bytes,
                    COUNT(*) AS user_count
             FROM users
