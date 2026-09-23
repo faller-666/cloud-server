@@ -160,7 +160,7 @@ public class AdminBillingService {
             throw new BizException(ErrorCode.REQUEST_ALREADY_HANDLED, "该申请已生成计费记录");
         }
         // 3. 冗余同步
-        userQuotaMapper.addExtra(ir.getUserId(), ir.getGbCount().longValue(), expireAt);
+        userQuotaMapper.addExtra(ir.getUserId(), ir.getGbCount().longValue() * 1024L * 1024L * 1024L, expireAt);
         // 4. 审计
         auditService.record(new AuditEvent(
                 admin.getId(), AuditActions.BILLING_APPROVE, String.valueOf(requestId), null,

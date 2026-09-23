@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * billing_records 数据访问。
- * 到期收回（R6）与冗余同步均使用条件更新，保证幂等可重入。
+ * 到期收回（R6）与冗余同步均使用条件更新 + 幂等标记（extra_deducted），保证可重入、不重复扣减。
  */
 @Mapper
 public interface BillingRecordMapper extends BaseMapper<BillingRecord> {
@@ -22,6 +22,7 @@ public interface BillingRecordMapper extends BaseMapper<BillingRecord> {
     /**
      * 到期收回核心（R6 定案）：条件更新 active -> expired，返回受影响行数。
      * WHERE status='active' AND expire_at<=now() 天然幂等，重复执行无副作用。
+     * 触发后记录 status 变为 expired，且 extra_deducted=0（等待后续扣减）。
      */
     @Update("""
             UPDATE billing_records
@@ -45,38 +46,65 @@ public interface BillingRecordMapper extends BaseMapper<BillingRecord> {
     int recalcUserExpireAt(@Param("userId") Long userId);
 
     /**
-     * 到期收回后同步扣减 extra_bytes（R6 第②步）。
-     * 扣减量为本用户本次到期的 gb_count 之和；GREATEST 兜底防负。
+     * 到期收回：计算指定用户"本次到期且尚未扣减"的增量额度（字节）。
+     * 仅统计 status='expired' AND extra_deducted=0 的记录（即刚被 expireDue 标记、
+     * 尚未扣减的本次到期记录；存量已扣记录 extra_deducted=1 被排除，保证存量不动）。
+     * 单位与发放侧保持一致：gb_count × 1024³（字节）。
+     */
+    @Select("""
+            SELECT COALESCE(SUM(b.gb_count) * 1073741824, 0)
+            FROM billing_records b
+            WHERE b.user_id = #{userId}
+              AND b.status = 'expired'
+              AND b.expire_at <= #{now}
+              AND b.extra_deducted = 0
+            """)
+    long sumDueExtraBytes(@Param("userId") Long userId, @Param("now") OffsetDateTime now);
+
+    /**
+     * 到期收回：扣减指定用户冗余 extra_bytes（字节，GREATEST 防负）。
+     * 需在 sumDueExtraBytes 之后再调用本方法，且与 markDueDeducted 在同一事务内。
      */
     @Update("""
             UPDATE users
-            SET extra_bytes = GREATEST(extra_bytes - (
-                SELECT COALESCE(SUM(b2.gb_count), 0) FROM billing_records b2
-                WHERE b2.user_id = #{userId} AND b2.status = 'expired'
-                  AND b2.expire_at <= #{now}
-            ), 0)
+            SET extra_bytes = GREATEST(extra_bytes - #{bytes}, 0)
             WHERE id = #{userId}
             """)
-    int deductExpiredExtra(@Param("userId") Long userId, @Param("now") OffsetDateTime now);
+    int reduceExtraBytes(@Param("userId") Long userId, @Param("bytes") long bytes);
 
     /**
-     * 到期收回：从本次到期的记录中收集去重后的 user_id 列表（供逐用户重算/扣减/审计）。
-     * 返回最近一批（避免一次全表，按 id 升序 LIMIT）。
+     * 到期收回：把指定用户已扣减的到期记录标记为 extra_deducted=1。
+     * 幂等标记：任务重跑、并发时不会对同一批记录重复扣减。
+     */
+    @Update("""
+            UPDATE billing_records
+            SET extra_deducted = 1
+            WHERE user_id = #{userId}
+              AND status = 'expired'
+              AND expire_at <= #{now}
+              AND extra_deducted = 0
+            """)
+    int markDueDeducted(@Param("userId") Long userId, @Param("now") OffsetDateTime now);
+
+    /**
+     * 到期收回：收集本次到期（expireDue 已标记为 expired）且尚未扣减的用户去重列表。
+     * 状态用 'expired' 且 extra_deducted=0 精确命中"本次待扣"用户，幂等；分批（LIMIT）防全表。
      */
     @Select("""
             SELECT DISTINCT user_id FROM billing_records
-            WHERE status = 'active' AND expire_at <= #{now}
+            WHERE status = 'expired' AND expire_at <= #{now} AND extra_deducted = 0
             ORDER BY user_id
             LIMIT #{limit}
             """)
     List<Long> selectExpiredUserIds(@Param("now") OffsetDateTime now, @Param("limit") int limit);
 
     /**
-     * 指定用户在本批次到期（<=now）但尚未扣减的记录（供审计 detail 用）。
+     * 指定用户本次到期、尚未扣减的记录（供审计 detail 用）。
      */
     @Select("""
             SELECT * FROM billing_records
-            WHERE user_id = #{userId} AND status = 'active' AND expire_at <= #{now}
+            WHERE user_id = #{userId} AND status = 'expired'
+              AND expire_at <= #{now} AND extra_deducted = 0
             """)
     List<BillingRecord> selectDueRecordsOfUser(@Param("userId") Long userId, @Param("now") OffsetDateTime now);
 
