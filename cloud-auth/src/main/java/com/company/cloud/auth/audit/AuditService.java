@@ -49,4 +49,10 @@ public class AuditService {
                 operatorId, AuditActions.QUOTA_CHANGE, String.valueOf(targetId), null,
                 Map.of("targetId", targetId, "oldQuota", oldQuota, "newQuota", newQuota)));
     }
+
+    public void demoteUser(Long operatorId, Long targetId, String oldRole, String newRole) {
+        auditService.record(new AuditEvent(
+                operatorId, AuditActions.USER_DEMOTE, String.valueOf(targetId), null,
+                Map.of("targetId", targetId, "oldRole", oldRole, "newRole", newRole)));
+    }
 }

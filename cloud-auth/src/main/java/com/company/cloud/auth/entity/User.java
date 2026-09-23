@@ -54,6 +54,14 @@ public class User {
     @Column(name = "last_login_at")
     private OffsetDateTime lastLoginAt;
 
+    /** 有效增量额度之和（冗余，由 D 组 billing 在审批通过/到期收回两个写点维护，V2008） */
+    @Column(name = "extra_bytes", nullable = false)
+    private Long extraBytes = 0L;
+
+    /** 最近一笔增量到期时刻（冗余展示，可空，V2008） */
+    @Column(name = "extra_expire_at")
+    private OffsetDateTime extraExpireAt;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 

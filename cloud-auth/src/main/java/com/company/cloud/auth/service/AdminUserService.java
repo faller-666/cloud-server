@@ -188,4 +188,48 @@ public class AdminUserService {
         random.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).substring(0, 16);
     }
+    /**
+     * 用户身份降级（A 组新增接口）：管理员将指定用户角色降为 {@code user}。
+     *
+     * <p>降级规则（A3 自我保护）：
+     * <ul>
+     *   <li>禁止降级自己的账号；</li>
+     *   <li>目标为管理员时，须保证系统中仍至少保留一个 active 管理员（防管理死锁）；</li>
+     *   <li>目标当前已是普通用户（非 admin）时，返回错误提示。</li>
+     * </ul>
+     * 降级成功后，该用户全部已签发 token 立即失效（uv +1）。
+     *
+     * @param id         目标用户 id
+     * @param operatorId 当前操作者 id（来自认证上下文）
+     */
+    @Transactional
+    public void demote(Long id, Long operatorId) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new BizException(ErrorCode.USER_NOT_FOUND));
+
+        // 目标非管理员：无降级必要
+        if (!"admin".equals(user.getRole())) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "该用户当前不是管理员，无需降级");
+        }
+
+        // A3-1：禁止降级自己
+        if (operatorId != null && operatorId.equals(user.getId())) {
+            throw new BizException(ErrorCode.FORBIDDEN, "不能降低自己的管理员权限");
+        }
+
+        // A3-2：最后管理员保护——降级后须至少保留一个 active 管理员
+        long activeAdminCount = userRepository.countByRoleAndStatus("admin", "active");
+        long remainingActiveAdmin = activeAdminCount - (user.isDisabled() ? 0 : 1);
+        if (remainingActiveAdmin <= 0) {
+            throw new BizException(ErrorCode.FORBIDDEN, "系统至少需要保留一个启用的管理员，不能降级最后一个管理员");
+        }
+
+        String oldRole = user.getRole();
+        user.setRole("user");
+        userRepository.save(user);
+        auditService.demoteUser(operatorId == null ? 0L : operatorId, id, oldRole, "user");
+        // 降级后该用户历史 token 全部失效
+        long ver = revocationService.bumpUserTokenVersion(id);
+        log.info("[admin] 降级用户 userId={} role {} -> user，已吊销全部 token (uv={})", id, oldRole, ver);
+    }
 }

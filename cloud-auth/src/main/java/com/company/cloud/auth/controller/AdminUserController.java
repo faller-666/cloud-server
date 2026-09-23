@@ -67,4 +67,18 @@ public class AdminUserController {
         String newPwd = adminUserService.resetPassword(id, body == null ? null : body.get("newPassword"));
         return Result.ok(Map.of("newPassword", newPwd));
     }
+    /**
+     * 用户身份降级（A 组新增接口，文档外补充）：管理员将指定用户角色降为普通用户。
+     *  <p>带 A3 自我保护：禁止降级自己；保证至少保留一个 active 管理员。
+     */
+    @PostMapping("/{id}/demote")
+    public Result<Void> demote(@PathVariable Long id,
+                               Authentication authentication) {
+        Long operatorId = null;
+        if (authentication != null && authentication.getPrincipal() instanceof CurrentUser cu) {
+            operatorId = cu.getId();
+        }
+        adminUserService.demote(id, operatorId);
+        return Result.ok();
+    }
 }
