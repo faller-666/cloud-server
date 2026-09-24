@@ -1,5 +1,6 @@
 package com.company.cloud.auth.dto;
 
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 /**
@@ -11,6 +12,7 @@ public class UpdateUserRequest {
     private String status;
 
     /** 调整后的配额（字节），不得低于当前已用量 */
+    @Min(value = 0, message = "quota cannot be negative")
     private Long quotaBytes;
 
     /** admin / user */

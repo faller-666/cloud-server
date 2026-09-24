@@ -127,10 +127,13 @@ public class AdminUserService {
             }
             user.setStatus(req.getStatus());
         }
-        if (req.getRole() != null && !req.getRole().isBlank()) {
+        if (req.getRole() != null && !req.getRole().isBlank() && !req.getRole().equals(user.getRole())) {
             user.setRole(req.getRole());
+            // 角色变更(含升降级)时吊销该用户全部已签发 token，避免旧 JWT 携带旧角色继续生效(与 demote 一致)
+            long ver = revocationService.bumpUserTokenVersion(id);
+            log.info("[admin] 变更角色 userId={} role -> {}，已吊销全部 token (uv={})", id, req.getRole(), ver);
         }
-        if (req.getQuotaBytes() != null && req.getQuotaBytes() > 0) {
+        if (req.getQuotaBytes() != null) {
             if (req.getQuotaBytes() < user.getUsedBytes()) {
                 // 目标值低于已用量 → 拒绝并提示（对标 R-A08）
                 throw new BizException(ErrorCode.QUOTA_TOO_LOW,
