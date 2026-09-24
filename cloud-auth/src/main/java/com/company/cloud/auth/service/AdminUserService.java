@@ -134,11 +134,13 @@ public class AdminUserService {
             log.info("[admin] 变更角色 userId={} role -> {}，已吊销全部 token (uv={})", id, req.getRole(), ver);
         }
         if (req.getQuotaBytes() != null) {
-            if (req.getQuotaBytes() < user.getUsedBytes()) {
-                // 目标值低于已用量 → 拒绝并提示（对标 R-A08）
+            // 校验口径：修改后的免费额度 + 充值额度(extra) 必须 > 已用量，否则拒绝（对标 R-A08）
+            long extra = user.getExtraBytes() == null ? 0L : user.getExtraBytes();
+            long newTotal = req.getQuotaBytes() + extra;
+            if (newTotal <= user.getUsedBytes()) {
                 throw new BizException(ErrorCode.QUOTA_TOO_LOW,
                         ErrorCode.QUOTA_TOO_LOW.getMessage() +
-                                "（当前已用量 " + user.getUsedBytes() + " 字节）");
+                                "（免费额度+充值额度需大于当前已用量 " + user.getUsedBytes() + " 字节）");
             }
             long oldQuota = user.getQuotaBytes();
             user.setQuotaBytes(req.getQuotaBytes());
