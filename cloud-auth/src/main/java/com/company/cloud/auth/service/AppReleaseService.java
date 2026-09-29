@@ -138,36 +138,45 @@ public class AppReleaseService {
             throw new BizException(ErrorCode.APP_STORAGE_FAILED);
         }
 
-        int nextCode = appReleaseRepository.maxVersionCodeByPlatform(platform) + 1;
         boolean publish = Boolean.TRUE.equals(publishNow);
-        AppRelease rel = AppRelease.builder()
-                .platform(platform)
-                .versionCode(nextCode)
-                .versionName(versionName)
-                .apkUrl(baseUrl + "/downloads/" + fileName)
-                .fileSize(size)
-                .fileHash(hash)
-                .updateNotes(updateNotes)
-                .forceUpdate(Boolean.TRUE.equals(forceUpdate))
-                .rolloutPercent(percent)
-                .status(publish ? "published" : "draft")
-                .publishedAt(publish ? OffsetDateTime.now() : null)
-                .build();
-        AppRelease saved;
-        try {
-            saved = appReleaseRepository.save(rel);
-        } catch (DataIntegrityViolationException e) {
-            // 并发撞 versionCode（唯一约束）或其它约束冲突：清理刚落盘的文件，转友好错误
+        String downloadUrl = baseUrl + "/downloads/" + fileName;
+        AppRelease saved = null;
+        // 版本号分配：并发撞号（唯一约束）时取下一号自动重试，最多 5 次，普通传包不感知冲突
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            int nextCode = appReleaseRepository.maxVersionCodeByPlatform(platform) + 1;
+            AppRelease rel = AppRelease.builder()
+                    .platform(platform)
+                    .versionCode(nextCode)
+                    .versionName(versionName)
+                    .apkUrl(downloadUrl)
+                    .fileSize(size)
+                    .fileHash(hash)
+                    .updateNotes(updateNotes)
+                    .forceUpdate(Boolean.TRUE.equals(forceUpdate))
+                    .rolloutPercent(percent)
+                    .status(publish ? "published" : "draft")
+                    .publishedAt(publish ? OffsetDateTime.now() : null)
+                    .build();
             try {
-                Files.deleteIfExists(Paths.get(downloadDir).resolve(fileName));
-            } catch (Exception ex) {
-                log.warn("[app-release] 清理冲突落盘文件失败 name={}", fileName, ex);
+                saved = appReleaseRepository.save(rel);
+                break;
+            } catch (DataIntegrityViolationException e) {
+                if (attempt >= 5) {
+                    // 持续撞号：清理刚落盘的文件，转友好错误
+                    try {
+                        Files.deleteIfExists(Paths.get(downloadDir).resolve(fileName));
+                    } catch (Exception ex) {
+                        log.warn("[app-release] 清理冲突落盘文件失败 name={}", fileName, ex);
+                    }
+                    log.warn("[app-release] 版本号持续撞号（已重试5次），清理文件 name={}", fileName);
+                    throw new BizException(ErrorCode.APP_VERSION_CONFLICT);
+                }
+                log.warn("[app-release] versionCode={} 冲突，取下一号重试 attempt={}",
+                        rel.getVersionCode(), attempt);
             }
-            log.warn("[app-release] 保存发布记录冲突（疑似并发撞版本号），清理文件 name={}", fileName);
-            throw new BizException(ErrorCode.APP_VERSION_CONFLICT);
         }
         log.info("[app-release] 创建发布 id={} platform={} versionCode={} status={} size={}",
-                saved.getId(), platform, nextCode, saved.getStatus(), size);
+                saved.getId(), platform, saved.getVersionCode(), saved.getStatus(), size);
         return saved;
     }
 
