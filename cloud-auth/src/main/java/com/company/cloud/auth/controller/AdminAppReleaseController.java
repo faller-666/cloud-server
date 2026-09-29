@@ -48,7 +48,7 @@ public class AdminAppReleaseController {
 
     @GetMapping
     public Result<Page<AppRelease>> list(
-            @RequestParam String platform,
+            @RequestParam(required = false) String platform,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {

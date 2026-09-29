@@ -25,6 +25,9 @@ public interface AppReleaseRepository extends JpaRepository<AppRelease, Long> {
     /** 管理端列表：仅按平台筛选，versionCode 倒序 */
     Page<AppRelease> findByPlatformOrderByVersionCodeDesc(String platform, Pageable pageable);
 
+    /** 管理端列表：仅按状态筛选，versionCode 倒序（platform 不填时用） */
+    Page<AppRelease> findByStatusOrderByVersionCodeDesc(String status, Pageable pageable);
+
     /** 某平台当前最大 versionCode（自动 +1 用，无记录返回 0） */
     @Query("SELECT COALESCE(MAX(r.versionCode), 0) FROM AppRelease r WHERE r.platform = :p")
     int maxVersionCodeByPlatform(@Param("p") String platform);

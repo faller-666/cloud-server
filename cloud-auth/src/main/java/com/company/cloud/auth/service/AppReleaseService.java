@@ -173,14 +173,18 @@ public class AppReleaseService {
 
     /** 管理端发布列表：platform 必填，status 可选，versionCode 倒序 */
     public Page<AppRelease> list(String platform, String status, Pageable pageable) {
-        if (platform == null || platform.isBlank()) {
-            throw new BizException(ErrorCode.BAD_REQUEST, "platform 不能为空");
+        boolean hasPlatform = platform != null && !platform.isBlank();
+        boolean hasStatus = status != null && !status.isBlank();
+        if (hasPlatform && hasStatus) {
+            return appReleaseRepository.findByPlatformAndStatusOrderByVersionCodeDesc(platform.trim(), status.trim(), pageable);
         }
-        if (status == null || status.isBlank()) {
+        if (hasPlatform) {
             return appReleaseRepository.findByPlatformOrderByVersionCodeDesc(platform.trim(), pageable);
         }
-        return appReleaseRepository.findByPlatformAndStatusOrderByVersionCodeDesc(
-                platform.trim(), status.trim(), pageable);
+        if (hasStatus) {
+            return appReleaseRepository.findByStatusOrderByVersionCodeDesc(status.trim(), pageable);
+        }
+        return appReleaseRepository.findAll(pageable);
     }
 
     /** 修改发布：放量 / 改强制 / 改说明 / 改全局最低强制版本号（不允许改 versionCode 与替换文件） */
