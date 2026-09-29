@@ -7,5 +7,6 @@ package com.company.cloud.auth.dto;
 public record PatchReleaseRequest(
         Integer rolloutPercent,
         Boolean forceUpdate,
-        String updateNotes) {
+        String updateNotes,
+        Integer minForceCode) {
 }

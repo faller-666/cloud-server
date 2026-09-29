@@ -10,6 +10,7 @@ import com.company.cloud.common.result.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -90,6 +91,7 @@ public class AppReleaseService {
     /**
      * 管理端上传并创建发布：落盘 downloads/ + 流式 SHA-256 + versionCode 自动 +1。
      * publishNow=true → published 并写 published_at，否则存 draft。
+     * DB 保存失败（如并发撞 versionCode）时回滚并清理已落盘文件，转友好错误。
      */
     @Transactional
     public AppRelease createRelease(MultipartFile file, String platform, String versionName,
@@ -151,7 +153,19 @@ public class AppReleaseService {
                 .status(publish ? "published" : "draft")
                 .publishedAt(publish ? OffsetDateTime.now() : null)
                 .build();
-        AppRelease saved = appReleaseRepository.save(rel);
+        AppRelease saved;
+        try {
+            saved = appReleaseRepository.save(rel);
+        } catch (DataIntegrityViolationException e) {
+            // 并发撞 versionCode（唯一约束）或其它约束冲突：清理刚落盘的文件，转友好错误
+            try {
+                Files.deleteIfExists(Paths.get(downloadDir).resolve(fileName));
+            } catch (Exception ex) {
+                log.warn("[app-release] 清理冲突落盘文件失败 name={}", fileName, ex);
+            }
+            log.warn("[app-release] 保存发布记录冲突（疑似并发撞版本号），清理文件 name={}", fileName);
+            throw new BizException(ErrorCode.APP_VERSION_CONFLICT);
+        }
         log.info("[app-release] 创建发布 id={} platform={} versionCode={} status={} size={}",
                 saved.getId(), platform, nextCode, saved.getStatus(), size);
         return saved;
@@ -169,7 +183,7 @@ public class AppReleaseService {
                 platform.trim(), status.trim(), pageable);
     }
 
-    /** 修改发布：放量 / 改强制 / 改说明（不允许改 versionCode 与替换文件） */
+    /** 修改发布：放量 / 改强制 / 改说明 / 改全局最低强制版本号（不允许改 versionCode 与替换文件） */
     @Transactional
     public AppRelease patch(Long id, PatchReleaseRequest req) {
         AppRelease rel = appReleaseRepository.findById(id)
@@ -185,6 +199,12 @@ public class AppReleaseService {
         }
         if (req.updateNotes() != null) {
             rel.setUpdateNotes(req.updateNotes());
+        }
+        if (req.minForceCode() != null) {
+            if (req.minForceCode() < 0) {
+                throw new BizException(ErrorCode.BAD_REQUEST, "minForceCode 需 >= 0");
+            }
+            rel.setMinForceCode(req.minForceCode());
         }
         return appReleaseRepository.save(rel);
     }

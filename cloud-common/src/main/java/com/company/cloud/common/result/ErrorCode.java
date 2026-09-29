@@ -57,6 +57,7 @@ public enum ErrorCode {
     APP_UPLOAD_REQUIRED(43100, "缺少安装包文件"),
     APP_PLATFORM_INVALID(43101, "平台不支持"),
     APP_FILE_TYPE_INVALID(43102, "安装包类型不合法"),
+    APP_VERSION_CONFLICT(43103, "版本号冲突，请重试（并发上传）"),
     APP_VERSION_NAME_REQUIRED(43104, "缺少版本号（versionName）"),
     APP_ROLLOUT_INVALID(43105, "灰度比例需在 0~100"),
     APP_RELEASE_NOT_FOUND(43106, "发布记录不存在"),

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
  * <p>GET /api/app/check-update?platform=&amp;versionCode=&amp;userId=
  */
 @RestController
-@RequestMapping("/api/app")
+@RequestMapping("/app")
 @RequiredArgsConstructor
 public class AppCheckController {
 

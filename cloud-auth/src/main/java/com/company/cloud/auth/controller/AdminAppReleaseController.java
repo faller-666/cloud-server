@@ -61,7 +61,7 @@ public class AdminAppReleaseController {
     public Result<AppRelease> patch(@PathVariable Long id,
                                     @RequestBody(required = false) PatchReleaseRequest req) {
         return Result.ok(appReleaseService.patch(id,
-                req == null ? new PatchReleaseRequest(null, null, null) : req));
+                req == null ? new PatchReleaseRequest(null, null, null, null) : req));
     }
 
     @PostMapping("/{id}/publish")
