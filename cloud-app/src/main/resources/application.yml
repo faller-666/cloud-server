@@ -58,6 +58,12 @@ spring:
     date-format: yyyy-MM-dd'T'HH:mm:ssXXX
     time-zone: Asia/Shanghai
 
+  # App/EXE 推送更新（依据 App 自动更新方案 §5.3）：上传大小限制调大以容纳 APK（200MB）
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 220MB
+
 # MyBatis-Plus
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -92,6 +98,11 @@ app:
     rate-limit-per-minute: ${SECURITY_RATE_LIMIT_PER_MINUTE:5}
   role:
     default-quota-bytes: ${DEFAULT_QUOTA_BYTES:21474836480}
+  update:
+    # 拼 apkUrl 的公网入口（含端口），须与 nginx /downloads/ 对外地址一致
+    base-url: ${APP_UPDATE_BASE_URL:https://112.4.135.254:19999}
+    # 安装包落盘目录（宿主机 downloads/，与 nginx 挂载一致，见方案 §8）
+    download-dir: ${APP_UPDATE_DOWNLOAD_DIR:/home/zzzzz/cloud/downloads}
 
 # B 组 传输域配置（MinIO 对象存储，本地开发默认，生产用环境变量覆盖）
 minio:

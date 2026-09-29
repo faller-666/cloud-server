@@ -53,9 +53,18 @@ public enum ErrorCode {
     REQUEST_ALREADY_HANDLED(40402, "该申请已被处理"),
     GB_COUNT_INVALID(40403, "申请 GB 数非法（必须是 1~1000 的整数）"),
 
+    // ---- App/EXE 推送更新（E 组 43xxx）----
+    APP_UPLOAD_REQUIRED(43100, "缺少安装包文件"),
+    APP_PLATFORM_INVALID(43101, "平台不支持"),
+    APP_FILE_TYPE_INVALID(43102, "安装包类型不合法"),
+    APP_VERSION_NAME_REQUIRED(43104, "缺少版本号（versionName）"),
+    APP_ROLLOUT_INVALID(43105, "灰度比例需在 0~100"),
+    APP_RELEASE_NOT_FOUND(43106, "发布记录不存在"),
+    APP_RELEASE_STATE_INVALID(43107, "当前状态不允许该操作"),
+    APP_STORAGE_FAILED(43108, "安装包落盘/哈希计算失败"),
+
     // ---- 系统 ----
     SYSTEM_ERROR(50000, "系统繁忙，请稍后重试");
-
     private final int code;
     private final String message;
 
