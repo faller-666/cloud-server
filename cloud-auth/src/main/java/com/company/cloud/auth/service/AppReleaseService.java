@@ -96,7 +96,7 @@ public class AppReleaseService {
     @Transactional
     public AppRelease createRelease(MultipartFile file, String platform, String versionName,
                                     String updateNotes, Boolean forceUpdate, Integer rolloutPercent,
-                                    Boolean publishNow) {
+                                    Boolean publishNow, Integer versionCode) {
         if (file == null || file.isEmpty()) {
             throw new BizException(ErrorCode.APP_UPLOAD_REQUIRED);
         }
@@ -109,6 +109,9 @@ public class AppReleaseService {
         int percent = rolloutPercent == null ? 5 : rolloutPercent;
         if (percent < 0 || percent > 100) {
             throw new BizException(ErrorCode.APP_ROLLOUT_INVALID);
+        }
+        if (versionCode != null && versionCode < 1) {
+            throw new BizException(ErrorCode.BAD_REQUEST, "versionCode 需为正整数或留空由后端自动分配");
         }
 
         String ext = extensionOf(platform, file.getOriginalFilename());
@@ -141,9 +144,12 @@ public class AppReleaseService {
         boolean publish = Boolean.TRUE.equals(publishNow);
         String downloadUrl = baseUrl + "/downloads/" + fileName;
         AppRelease saved = null;
-        // 版本号分配：并发撞号（唯一约束）时取下一号自动重试，最多 5 次，普通传包不感知冲突
+        // 版本号分配：前端传了 versionCode 则用指定值（撞号则直接报错，绝不自动改号）；
+        // 没传则自动 max+1，并发撞号（唯一约束）时取下一号自动重试，最多 5 次，普通传包不感知冲突
+        boolean explicitCode = versionCode != null;
         for (int attempt = 1; attempt <= 5; attempt++) {
-            int nextCode = appReleaseRepository.maxVersionCodeByPlatform(platform) + 1;
+            int nextCode = explicitCode ? versionCode
+                    : appReleaseRepository.maxVersionCodeByPlatform(platform) + 1;
             AppRelease rel = AppRelease.builder()
                     .platform(platform)
                     .versionCode(nextCode)
@@ -172,6 +178,17 @@ public class AppReleaseService {
                     }
                     log.error("[app-release] 保存发布记录约束冲突（非版本撞号），清理文件 name={}", fileName, e);
                     throw e;
+                }
+                if (explicitCode) {
+                    // 前端明确指定的版本号已被占用：不自动改号，清理落盘文件后报清晰错误
+                    try {
+                        Files.deleteIfExists(Paths.get(downloadDir).resolve(fileName));
+                    } catch (Exception ex) {
+                        log.warn("[app-release] 清理冲突落盘文件失败 name={}", fileName, ex);
+                    }
+                    log.warn("[app-release] 指定版本号已存在 platform={} versionCode={}，清理文件 name={}",
+                            platform, versionCode, fileName);
+                    throw new BizException(ErrorCode.APP_VERSION_ALREADY_EXISTS);
                 }
                 if (attempt >= 5) {
                     // 持续撞号：清理刚落盘的文件，转友好错误

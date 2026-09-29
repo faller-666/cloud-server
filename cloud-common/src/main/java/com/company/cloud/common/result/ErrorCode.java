@@ -57,12 +57,13 @@ public enum ErrorCode {
     APP_UPLOAD_REQUIRED(43100, "缺少安装包文件"),
     APP_PLATFORM_INVALID(43101, "平台不支持"),
     APP_FILE_TYPE_INVALID(43102, "安装包类型不合法"),
-    APP_VERSION_CONFLICT(43103, "版本号冲突，请重试（并发上传）"),
+    APP_VERSION_CONFLICT(43103, "版本号持续撞号（并发极端撞号，已自动重试5次仍失败）"),
     APP_VERSION_NAME_REQUIRED(43104, "缺少版本号（versionName）"),
     APP_ROLLOUT_INVALID(43105, "灰度比例需在 0~100"),
     APP_RELEASE_NOT_FOUND(43106, "发布记录不存在"),
     APP_RELEASE_STATE_INVALID(43107, "当前状态不允许该操作"),
     APP_STORAGE_FAILED(43108, "安装包落盘/哈希计算失败"),
+    APP_VERSION_ALREADY_EXISTS(43109, "该版本号已存在，请更换或留空自动分配"),
 
     // ---- 系统 ----
     SYSTEM_ERROR(50000, "系统繁忙，请稍后重试");

@@ -41,9 +41,10 @@ public class AdminAppReleaseController {
             @RequestParam(required = false) String updateNotes,
             @RequestParam(required = false) Boolean forceUpdate,
             @RequestParam(required = false) Integer rolloutPercent,
-            @RequestParam(required = false) Boolean publishNow) {
+            @RequestParam(required = false) Boolean publishNow,
+            @RequestParam(required = false) Integer versionCode) {
         return Result.ok(appReleaseService.createRelease(
-                file, platform, versionName, updateNotes, forceUpdate, rolloutPercent, publishNow));
+                file, platform, versionName, updateNotes, forceUpdate, rolloutPercent, publishNow, versionCode));
     }
 
     @GetMapping
