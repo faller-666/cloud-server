@@ -52,18 +52,22 @@ public class AppRelease {
     private String updateNotes;
 
     /** 是否强制更新 */
+    @Builder.Default
     @Column(name = "force_update", nullable = false)
     private Boolean forceUpdate = false;
 
     /** 全局最低强制版本：低于此版本一律强制，0=不使用 */
+    @Builder.Default
     @Column(name = "min_force_code", nullable = false)
     private Integer minForceCode = 0;
 
     /** 灰度比例 0~100，100=全量 */
+    @Builder.Default
     @Column(name = "rollout_percent", nullable = false)
     private Integer rolloutPercent = 100;
 
     /** 状态：draft / published / disabled */
+    @Builder.Default
     @Column(nullable = false)
     private String status = "draft";
 

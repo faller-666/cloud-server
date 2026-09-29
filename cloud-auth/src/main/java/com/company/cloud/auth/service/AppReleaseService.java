@@ -153,6 +153,7 @@ public class AppReleaseService {
                     .fileHash(hash)
                     .updateNotes(updateNotes)
                     .forceUpdate(Boolean.TRUE.equals(forceUpdate))
+                    .minForceCode(0)
                     .rolloutPercent(percent)
                     .status(publish ? "published" : "draft")
                     .publishedAt(publish ? OffsetDateTime.now() : null)
@@ -161,6 +162,17 @@ public class AppReleaseService {
                 saved = appReleaseRepository.save(rel);
                 break;
             } catch (DataIntegrityViolationException e) {
+                // 只有「版本号唯一约束」冲突才是撞号，才可取下一号重试；
+                // 其它约束冲突（如字段为 null / 非法值）直接暴露真实异常，绝不误判成撞号
+                if (!isPlatformVersionConflict(e)) {
+                    try {
+                        Files.deleteIfExists(Paths.get(downloadDir).resolve(fileName));
+                    } catch (Exception ex) {
+                        log.warn("[app-release] 清理冲突落盘文件失败 name={}", fileName, ex);
+                    }
+                    log.error("[app-release] 保存发布记录约束冲突（非版本撞号），清理文件 name={}", fileName, e);
+                    throw e;
+                }
                 if (attempt >= 5) {
                     // 持续撞号：清理刚落盘的文件，转友好错误
                     try {
@@ -168,10 +180,10 @@ public class AppReleaseService {
                     } catch (Exception ex) {
                         log.warn("[app-release] 清理冲突落盘文件失败 name={}", fileName, ex);
                     }
-                    log.warn("[app-release] 版本号持续撞号（已重试5次），清理文件 name={}", fileName);
+                    log.warn("[app-release] 版本号持续撞号（已自动重试5次仍失败），清理文件 name={}", fileName);
                     throw new BizException(ErrorCode.APP_VERSION_CONFLICT);
                 }
-                log.warn("[app-release] versionCode={} 冲突，取下一号重试 attempt={}",
+                log.warn("[app-release] versionCode={} 撞号，取下一号重试 attempt={}",
                         rel.getVersionCode(), attempt);
             }
         }
@@ -279,5 +291,25 @@ public class AppReleaseService {
 
     private String sanitize(String s) {
         return s.replaceAll("[^A-Za-z0-9._-]", "-");
+    }
+
+    /** 判断约束冲突是否由「版本号唯一约束 uk_app_release_platform_version」引起，即真正的撞号 */
+    private boolean isPlatformVersionConflict(DataIntegrityViolationException e) {
+        String msg = e.getMessage();
+        if (msg != null && msg.contains("uk_app_release_platform_version")) {
+            return true;
+        }
+        // 某些驱动把约束名放在 cause 链的 message 里，兜底查一层
+        Throwable t = e.getCause();
+        int depth = 0;
+        while (t != null && depth < 3) {
+            String m = t.getMessage();
+            if (m != null && m.contains("uk_app_release_platform_version")) {
+                return true;
+            }
+            t = t.getCause();
+            depth++;
+        }
+        return false;
     }
 }
